@@ -26,6 +26,7 @@
 
 #include "./include_code_gen/ft_sgemm_small.cuh"
 #include "./include_code_gen/ft_sgemm_medium.cuh"
+#include "./include_code_gen/ft_sgemm_medium_96.cuh"
 #include "./include_code_gen/ft_sgemm_large.cuh"
 #include "./include_code_gen/ft_sgemm_tall.cuh"
 #include "./include_code_gen/ft_sgemm_wide.cuh"
