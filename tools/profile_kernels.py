@@ -1,5 +1,9 @@
 import subprocess
 
+# ------------------------------- #
+# --- Settings from profiling --- #
+# ------------------------------- #
+
 KERNEL_LIST = [
     ("sgemm_small", 1),
     ("sgemm_medium", 2),
@@ -26,6 +30,10 @@ KERNEL_SIZES = [
     7168,
     8192,
 ]
+
+# -------------------------------- #
+# --- Files, folders and paths --- #
+# -------------------------------- #
 
 NCU_PATH = "/opt/nvidia/nsight-compute/2024.3.1/target/linux-v4l_l4t-t210-a64/ncu"
 FT_SGEMM_PATH = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs/build"
