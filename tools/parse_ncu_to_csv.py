@@ -37,11 +37,17 @@ KERNEL_SIZES = [
 # --- Files, folders and paths --- #
 # -------------------------------- #
 
+# Experiment selection
+EXPERIMENT_NAME = "exp_vanilla"
+# EXPERIMENT_NAME = "exp_detection"
+
 NCU_PATH = "/opt/nvidia/nsight-compute/2024.3.1/target/linux-v4l_l4t-t210-a64/ncu" # Or just use "ncu" if to root privileges needed
 FT_SGEMM_PATH = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs/build"
-NCU_RESULTS_PATH = f"{FT_SGEMM_PATH}/ncu_results"
-NCU_RESULTS_TXT_PATH = f"{FT_SGEMM_PATH}/ncu_results_txt"
-NCU_RESULTS_CSV_PATH = f"{FT_SGEMM_PATH}/ncu_results_csv"
+EXPERIMENT_PATH = f"{FT_SGEMM_PATH}/{EXPERIMENT_NAME}"
+
+NCU_RESULTS_PATH = f"{EXPERIMENT_PATH}/ncu_results"
+NCU_RESULTS_TXT_PATH = f"{EXPERIMENT_PATH}/ncu_results_txt"
+NCU_RESULTS_CSV_PATH = f"{EXPERIMENT_PATH}/ncu_results_csv"
 
 NCU_CSV_FILE = f"{NCU_RESULTS_CSV_PATH}/ncu_results.csv"
 

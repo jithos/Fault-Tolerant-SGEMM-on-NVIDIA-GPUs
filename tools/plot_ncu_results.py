@@ -118,12 +118,17 @@ S_2_M = {
 # --- Files, folders and paths --- #
 # -------------------------------- #
 
-NCU_CSV_FILE_NAME = "ncu_results.csv"
+# Experiment selection
+EXPERIMENT_NAME = "exp_vanilla"
+# EXPERIMENT_NAME = "exp_detection"
 
 FT_SGEMM_PATH = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs/build"
-NCU_RESULTS_CSV_PATH = f"{FT_SGEMM_PATH}/ncu_results_csv"
+EXPERIMENT_PATH = f"{FT_SGEMM_PATH}/{EXPERIMENT_NAME}"
+NCU_RESULTS_CSV_PATH = f"{EXPERIMENT_PATH}/ncu_results_csv"
+PLOT_PATH = f"{EXPERIMENT_PATH}/plots"
+
+NCU_CSV_FILE_NAME = "ncu_results.csv"
 NCU_CSV_FILE = f"{NCU_RESULTS_CSV_PATH}/{NCU_CSV_FILE_NAME}"
-PLOT_PATH = f"{FT_SGEMM_PATH}/plots"
 
 # ------------------------ #
 # --- PLOT_PATHHelper functions --- #
@@ -238,8 +243,8 @@ if __name__ == "__main__":
             plot_metric(df, metric, overlay=overlay)
 
     # Plot from pickled plot
-    # load_plot_pickle(f"{FT_SGEMM_PATH}/plots/Duration_vs_Kernels.mplpkl")
-    # load_plot_pickle(f"{FT_SGEMM_PATH}/plots/Achieved Occupancy_vs_Kernels.mplpkl")
+    # load_plot_pickle(f"{EXPERIMENT_PATH}/plots/Duration_vs_Kernels.mplpkl")
+    # load_plot_pickle(f"{EXPERIMENT_PATH}/plots/Achieved Occupancy_vs_Kernels.mplpkl")
 
     # Show the plot
     if SHOW_PLOTS:
