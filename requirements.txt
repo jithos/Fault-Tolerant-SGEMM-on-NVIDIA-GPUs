@@ -1,0 +1,4 @@
+mplfig
+matplotlib
+numpy
+pandas
