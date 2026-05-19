@@ -5,9 +5,15 @@
 #include <cuda_runtime.h> 
 #include <helper_functions.h> 
 #include <helper_cuda.h>
-#include "kernels.cuh"      
+#include "kernels.cuh"
+#include <ctime>
 #define multi 20   
-int main(int argc, char **argv){                                 
+int main(int argc, char **argv){
+// Print start timestamp
+time_t timestamp;
+time(&timestamp);
+printf("Start timestamp: %ld, %s", timestamp, ctime(&timestamp));
+
 // Iinitialization   
 srand(10);      
 int start_size = atoi(argv[1]);        
@@ -553,4 +559,6 @@ for(int jj = 0; jj < 15; ++jj){
 }
 printf("\n");
 }
+time(&timestamp);
+printf("End timestamp: %ld, %s", timestamp, ctime(&timestamp));
 }
