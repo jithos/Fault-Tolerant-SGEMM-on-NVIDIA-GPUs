@@ -89,6 +89,8 @@ for (int i=0; i<MAX_SIZE; i++)
 int row_in = 0;
 int column_in = 0;
 A[column_in * MAX_SIZE + row_in] = 5.0;
+int B_in = 1023;
+B[B_in * MAX_SIZE + B_in] = 2.0;
 // Jithin - DEBUGGING END
     
         
@@ -256,8 +258,8 @@ cudaDeviceSynchronize();
 // Jithin - DEBUGGING START
 cudaMemcpy(check_A_col, dcheck_A_col, sizeof(float) * MAX_SIZE, cudaMemcpyDeviceToHost);
 cudaDeviceSynchronize();
-// cudaMemcpy(check_B_row, dcheck_B_row, sizeof(float) * MAX_SIZE, cudaMemcpyDeviceToHost);
-// cudaDeviceSynchronize();
+cudaMemcpy(check_B_row, dcheck_B_row, sizeof(float) * MAX_SIZE, cudaMemcpyDeviceToHost);
+cudaDeviceSynchronize();
 cudaMemcpy(debug_int, d_debug_int, sizeof(int)*10, cudaMemcpyDeviceToHost);
 cudaDeviceSynchronize();
 
@@ -301,23 +303,35 @@ printf("--- A column checksums -------------------------------\n");
 // {
 //     printf("%f, ", check_A_col[i + column_start]);
 // }
-int check_count = 0;
-int failed_columns[MAX_SIZE];
-int failed_values[MAX_SIZE];
+int col_count = 0, row_count = 0;
+int failed_columns[MAX_SIZE], failed_rows[MAX_SIZE];
+int failed_col_values[MAX_SIZE], failed_row_values[MAX_SIZE];
 for (int i=0; i<MAX_SIZE; i++)
 {
     if (check_A_col[i] != MAX_SIZE)
     {
-        failed_columns[check_count] = i;
-        failed_values[check_count] = check_A_col[i];
-        check_count++;
+        failed_columns[col_count] = i;
+        failed_col_values[col_count] = check_A_col[i];
+        col_count++;
+    }
+    if (check_B_row[i] != 1)
+    {
+        failed_rows[row_count] = i;
+        failed_row_values[row_count] = check_B_row[i];
+        row_count++;
     }
 }
-printf("Number of checksum failures: %d\n", check_count);
+printf("Number of column failures: %d\n", col_count);
 printf("Failed columns: ");
-for (int i=0; i<check_count; i++)
+for (int i=0; i<col_count; i++)
 {
-    printf("%d (%d), ", failed_columns[i], failed_values[i]);
+    printf("%d (%d), ", failed_columns[i], failed_col_values[i]);
+}
+printf("\n");
+printf("Failed rows: ");
+for (int i=0; i<row_count; i++)
+{
+    printf("%d (%d), ", failed_rows[i], failed_row_values[i]);
 }
 printf("\n");
 // printf("--- debug int -------------------------------\n");

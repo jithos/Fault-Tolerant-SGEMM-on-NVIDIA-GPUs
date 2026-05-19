@@ -32,7 +32,7 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
 
     // Jithin - DEBUGGING START
     __shared__ float A_col[8]; // [ks=8]
-    __shared__ float B_col[8]; // [ks=8]
+    __shared__ float B_row[8]; // [ks=8]
     // Jithin - DEBUGGIN END
     
     int buffer_A_offset = 0;
@@ -166,8 +166,7 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
     B_r += __shfl_xor_sync(0xffffffff, B_r, 2, 32);
     B_r += __shfl_xor_sync(0xffffffff, B_r, 4, 32);
 
-    // Jithin - IMPLEMENTATION START
-    // (tx % load_tile_B_num_threads_one_col) * (load_tile_B_num_floats_one_thread) + (int)(tx / load_tile_B_num_threads_one_col) * N;
+    // Column checksum accumulation - START
     const int col_tile = (int)(tx / load_tile_A_num_threads_one_col); // Max value: 64 / 8 = 8
     const int col_lane = tx % load_tile_A_num_threads_one_col;
 
@@ -183,7 +182,23 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
         atomicAdd(&check_A_col[tx], A_col[tx]);
     }
     __syncthreads();
-    // Jithin - IMPLEMENTATION END
+    // Column checksum accumulation - END
+    // Row checksum accumulation - START
+    const int row_tile = (int)(tx / load_tile_B_num_threads_one_col); // Max value: 64 / 8 = 8
+    const int row_lane = tx % load_tile_B_num_threads_one_col;
+
+    if (row_lane == 0)
+    {
+        B_row[row_tile] = B_r; // Accumulate row checksum over tile B
+    }
+    __syncthreads();
+
+    if (bx == 0 && tx < ks)
+    {
+        atomicAdd(&check_B_row[tx], B_row[tx]);
+    }
+    __syncthreads();
+    // Row checksum accumulation - END
 
         // saxpy
     block_level_A_c[0].x = prefetch_vector_tile_A[0].x * B_r; 
@@ -394,8 +409,7 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
         B_r += __shfl_xor_sync(0xffffffff, B_r, 2, 32);
         B_r += __shfl_xor_sync(0xffffffff, B_r, 4, 32);
 
-        // Jithin - IMPLEMENTATION START
-        // (tx % load_tile_B_num_threads_one_col) * (load_tile_B_num_floats_one_thread) + (int)(tx / load_tile_B_num_threads_one_col) * N;
+        // Column checksum accumulation - START
         const int col_tile = (int)(tx / load_tile_A_num_threads_one_col); // Max value: 64 / 8 = 8
         const int col_lane = tx % load_tile_A_num_threads_one_col;
 
@@ -406,12 +420,34 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
         __syncthreads();
 
         // Once a block is finished, accumulate all column checksums of the block to the column checksums of the global matrix
-        if (by == 0 && tx < ks)
+        if (by == 0 && tx < ks && k + ks < K)
         {
             atomicAdd(&check_A_col[(k + ks) + tx], A_col[tx]); // (k + ks) needed due to initial checksum calculation before the K loop
         }
+        if (bx == 0 && by == 0 && tx == 0){
+            debug_int[0] = (k + ks);
+        }
         __syncthreads();
-        // Jithin - IMPLEMENTATION END
+        // Column checksum accumulation - END
+        // Row checksum accumulation - START
+        const int row_tile = (int)(tx / load_tile_B_num_threads_one_col); // Max value: 64 / 8 = 8
+        const int row_lane = tx % load_tile_B_num_threads_one_col;
+
+        if (row_lane == 0)
+        {
+            B_row[row_tile] = B_r; // Accumulate row checksum over tile B
+        }
+        __syncthreads();
+
+        if (bx == 0 && tx < ks && k + ks < K)
+        {
+            atomicAdd(&check_B_row[(k + ks) + tx], B_row[tx]);
+        }
+        if (bx == 0 && by == 0 && tx == 0){
+            debug_int[1] = (k + ks);
+        }
+        __syncthreads();
+        // Row checksum accumulation - END
         
         // saxpy
         block_level_A_c[0].x = prefetch_vector_tile_A[0].x * B_r; 
