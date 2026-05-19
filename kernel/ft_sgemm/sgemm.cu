@@ -21,7 +21,7 @@ int kernel_number;
 int num_tests = 5;                            
 float alpha = 1.0;                      
 float negative_1 = -1.0;                           
-float beta = -1.5;                    
+float beta = 0.0;
 int max_size = max(end_size,test_size);        
 int M, N, K;    
 M = test_size; N = test_size;  K = test_size;
@@ -64,6 +64,26 @@ fill_vector(check_A_row_mul_C, 0.0, MAX_SIZE);
 fill_vector(check_B_row_mul_C, 0.0, MAX_SIZE);         
 copy_matrix(C, C_ref, MAX_SIZE); 
 for(int i = 1; i <= MAX_SIZE; ++i)E_[i] = (float)i; 
+
+// Jithin - DEBUGGING START
+int *d_debug_int = NULL, *debug_int = NULL;
+debug_int = (int *)malloc(sizeof(int) * 10);
+CUDA_CALLER(cudaMalloc((void**) &d_debug_int, sizeof(int)*10));
+CUDA_CALLER(cudaMemcpy(d_debug_int, debug_int, sizeof(int)*10, cudaMemcpyHostToDevice));
+// Fill matrices
+fill_vector(A, 1.0, MAX_SIZE * MAX_SIZE);
+fill_vector(B, 0.0, MAX_SIZE * MAX_SIZE);
+fill_vector(C, 0.0, MAX_SIZE * MAX_SIZE);
+// Make B an identity matrix
+for (int i=0; i<MAX_SIZE; i++)
+{
+    B[i * MAX_SIZE + i] = 1.0;
+}
+// Set one element in A
+int row_in = 0;
+int column_in = 0;
+A[column_in * MAX_SIZE + row_in] = 5.0;
+// Jithin - DEBUGGING END
     
         
 CUDA_CALLER(cudaMalloc((void**) &dA, sizeof(float) * MAX_SIZE * MAX_SIZE));
@@ -82,7 +102,7 @@ CUDA_CALLER(cudaMalloc((void**) &dcheck_B_row_mul_A, sizeof(float) * MAX_SIZE));
 CUDA_CALLER(cudaMalloc((void**) &dRes, sizeof(float)));   
 CUDA_CALLER(cudaMemcpy(dE, E, sizeof(float) * MAX_SIZE, cudaMemcpyHostToDevice));  
 CUDA_CALLER(cudaMemcpy(dE_, E_, sizeof(float) * MAX_SIZE, cudaMemcpyHostToDevice)); 
-CUDA_CALLER(cudaMemcpy(dcheck_A_col, dcheck_A_col, sizeof(float) * MAX_SIZE, cudaMemcpyHostToDevice));
+CUDA_CALLER(cudaMemcpy(dcheck_A_col, check_A_col, sizeof(float) * MAX_SIZE, cudaMemcpyHostToDevice));
 CUDA_CALLER(cudaMemcpy(dcheck_B_row, check_B_row, sizeof(float) * MAX_SIZE, cudaMemcpyHostToDevice));
 CUDA_CALLER(cudaMemcpy(dcheck_C_col, check_C_col, sizeof(float) * MAX_SIZE, cudaMemcpyHostToDevice));
 CUDA_CALLER(cudaMemcpy(dcheck_C_row, check_C_row, sizeof(float) * MAX_SIZE, cudaMemcpyHostToDevice));
@@ -159,7 +179,7 @@ else if(kernel_number == 12){
     dim3 blockDim(64);  
     dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
     cudaDeviceSynchronize();  
-    ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC, alpha, beta);  
+    ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC, alpha, beta, dcheck_A_col, dcheck_B_row, d_debug_int);  
     }                
 }      
 else if(kernel_number == 13){   
@@ -226,6 +246,81 @@ cudaMemcpy(C, dC, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
 cudaDeviceSynchronize();
 cudaMemcpy(C_ref, dC_ref, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
 cudaDeviceSynchronize();                                                                    
+
+// Jithin - DEBUGGING START
+cudaMemcpy(check_A_col, dcheck_A_col, sizeof(float) * MAX_SIZE, cudaMemcpyDeviceToHost);
+cudaDeviceSynchronize();
+// cudaMemcpy(check_B_row, dcheck_B_row, sizeof(float) * MAX_SIZE, cudaMemcpyDeviceToHost);
+// cudaDeviceSynchronize();
+cudaMemcpy(debug_int, d_debug_int, sizeof(int)*10, cudaMemcpyDeviceToHost);
+cudaDeviceSynchronize();
+
+int rows = 5;
+int columns = 10;
+float values_ref[rows*columns];
+float values[rows*columns];
+int row_start = 0;
+int column_start = 0;
+for (int i=0; i<columns; i++)
+{
+    for (int j=0; j<rows; j++)
+    {
+        values_ref[i * rows + j] = C_ref[(i+column_start) * M + (j+row_start)];
+        values[i * rows + j] = C[(i+column_start) * M + (j+row_start)];
+    }
+}
+printf("--- C_ref -----------------------------\n");
+// Print values from C_ref
+for (int j=0; j<rows; j++)
+{
+    for (int i=0; i<columns; i++)
+    {
+        printf("%f, ", values_ref[i * rows + j]);
+    }
+    printf("\n");
+}
+printf("--- C result -------------------------------\n");
+// Print values from C
+for (int j=0; j<rows; j++)
+{
+    for (int i=0; i<columns; i++)
+    {
+        printf("%f, ", values[i * rows + j]);
+    }
+    printf("\n");
+}
+printf("--- A column checksums -------------------------------\n");
+// Print checksum values
+// for (int i=0; i<columns; i++)
+// {
+//     printf("%f, ", check_A_col[i + column_start]);
+// }
+int check_count = 0;
+int failed_columns[MAX_SIZE];
+int failed_values[MAX_SIZE];
+for (int i=0; i<MAX_SIZE; i++)
+{
+    if (check_A_col[i] != MAX_SIZE)
+    {
+        failed_columns[check_count] = i;
+        failed_values[check_count] = check_A_col[i];
+        check_count++;
+    }
+}
+printf("Number of checksum failures: %d\n", check_count);
+printf("Failed columns: ");
+for (int i=0; i<check_count; i++)
+{
+    printf("%d (%d), ", failed_columns[i], failed_values[i]);
+}
+printf("\n");
+// printf("--- debug int -------------------------------\n");
+// printf("clock: %d\n", debug_int[0]);
+// printf("clock64: %d\n", debug_int[1]);
+// printf("clock: %d\n", debug_int[2]);
+// printf("clock64: %d\n", debug_int[3]);
+printf("--- END -----------------------------\n");
+// Jithin - DEBUGGING END
 
 if (!verify_matrix(C_ref, C, M, N)) { 
     printf("kernel %d failed to pass the correctness verification against NVIDIA cuBLAS. Exited.\n", kernel_number);
@@ -377,7 +472,7 @@ for(int jj = 0; jj < 15; ++jj){
         dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
         for(int ii = 0; ii < num_tests; ++ii){
             cudaDeviceSynchronize();
-            ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC, alpha, beta);
+            ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC, alpha, beta, dcheck_A_col, dcheck_B_row, d_debug_int);
             cudaDeviceSynchronize();
         }
         cudaEventRecord(end);     
