@@ -38,12 +38,12 @@ KERNEL_SIZES = [
 # -------------------------------- #
 
 # Experiment selection
-EXPERIMENT_NAME = "exp_vanilla"
-# EXPERIMENT_NAME = "exp_detection"
+# EXPERIMENT_NAME = "vanilla"
+EXPERIMENT_NAME = "detection"
 
 NCU_PATH = "/opt/nvidia/nsight-compute/2024.3.1/target/linux-v4l_l4t-t210-a64/ncu" # Or just use "ncu" if to root privileges needed
 FT_SGEMM_PATH = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs/build"
-EXPERIMENT_PATH = f"{FT_SGEMM_PATH}/{EXPERIMENT_NAME}"
+EXPERIMENT_PATH = f"{FT_SGEMM_PATH}/ncu_exp_{EXPERIMENT_NAME}"
 
 NCU_RESULTS_PATH = f"{EXPERIMENT_PATH}/ncu_results"
 NCU_RESULTS_TXT_PATH = f"{EXPERIMENT_PATH}/ncu_results_txt"
@@ -55,9 +55,9 @@ NCU_CSV_FILE = f"{NCU_RESULTS_CSV_PATH}/ncu_results.csv"
 # --- Conversion settings --- #
 # --------------------------- #
 
-RUN_NCU_2_TXT = False
-RUN_TXT_2_CSV = False
-NORMALIZE_CSV_UNITS = True
+RUN_NCU_2_TXT = True
+RUN_TXT_2_CSV = True
+NORMALIZE_CSV_UNITS = True # Normalize units in CSV (e.g. ms and us to seconds)
 
 def save_ncu_to_txt(ncu_rep_file, txt_file):
     ncu_cmd = f"{NCU_PATH} --import {ncu_rep_file} > {txt_file}"

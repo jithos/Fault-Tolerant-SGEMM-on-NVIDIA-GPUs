@@ -119,11 +119,11 @@ S_2_M = {
 # -------------------------------- #
 
 # Experiment selection
-EXPERIMENT_NAME = "exp_vanilla"
-# EXPERIMENT_NAME = "exp_detection"
+EXPERIMENT_NAME = "vanilla"
+# EXPERIMENT_NAME = "detection"
 
 FT_SGEMM_PATH = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs/build"
-EXPERIMENT_PATH = f"{FT_SGEMM_PATH}/{EXPERIMENT_NAME}"
+EXPERIMENT_PATH = f"{FT_SGEMM_PATH}/ncu_exp_{EXPERIMENT_NAME}"
 NCU_RESULTS_CSV_PATH = f"{EXPERIMENT_PATH}/ncu_results_csv"
 PLOT_PATH = f"{EXPERIMENT_PATH}/plots"
 
