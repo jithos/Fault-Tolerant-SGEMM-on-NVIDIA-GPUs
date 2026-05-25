@@ -71,7 +71,7 @@ fill_vector(check_B_row_mul_C, 0.0, MAX_SIZE);
 copy_matrix(C, C_ref, MAX_SIZE); 
 for(int i = 1; i <= MAX_SIZE; ++i)E_[i] = (float)i; 
 
-// Jithin - DEBUGGING START
+// J - DEBUGGING START
 int *d_debug_int = NULL, *debug_int = NULL;
 debug_int = (int *)malloc(sizeof(int) * 10);
 CUDA_CALLER(cudaMalloc((void**) &d_debug_int, sizeof(int)*10));
@@ -91,7 +91,7 @@ int column_in = 0;
 A[column_in * MAX_SIZE + row_in] = 5.0;
 int B_in = 1023;
 B[B_in * MAX_SIZE + B_in] = 2.0;
-// Jithin - DEBUGGING END
+// J - DEBUGGING END
     
         
 CUDA_CALLER(cudaMalloc((void**) &dA, sizeof(float) * MAX_SIZE * MAX_SIZE));
@@ -340,7 +340,7 @@ printf("\n");
 // printf("clock: %d\n", debug_int[2]);
 // printf("clock64: %d\n", debug_int[3]);
 printf("--- END -----------------------------\n");
-// Jithin - DEBUGGING END
+// J - DEBUGGING END
 
 if (!verify_matrix(C_ref, C, M, N)) { 
     printf("kernel %d failed to pass the correctness verification against NVIDIA cuBLAS. Exited.\n", kernel_number);

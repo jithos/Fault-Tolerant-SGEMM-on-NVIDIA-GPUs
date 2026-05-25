@@ -5,16 +5,16 @@ def ft_sgemm_code_gen(param,function_name, if_abft=False):
     ms, ns, ks, mw, nw, mr, nr = param
     vector_variable = {'float4':['x','y','z','w'], 'float2':['x','y']}
     
-    total_thread_num = (int)((ms / mr) * (ns / nr))
+    total_thread_num = (int)((ms / mr) * (ns / nr)) # J - For "medium" - int((32/4)*(32/4)) = 64
     
-    global_read_byte_A = (int)(ms * ks / total_thread_num)
-    global_read_byte_B = (int)(ns * ks / total_thread_num)
+    global_read_byte_A = (int)(ms * ks / total_thread_num) # J - For "medium" - int((32*8)/64) = 4
+    global_read_byte_B = (int)(ns * ks / total_thread_num) # J - For "medium" - int((32*8)/64) = 4
     
-    global_read_vector_type_A = 'float4' if global_read_byte_A >= 4 else 'float2'
-    global_read_vector_type_B = 'float4' if global_read_byte_B >= 4 else 'float2'
+    global_read_vector_type_A = 'float4' if global_read_byte_A >= 4 else 'float2' # J - For "medium" - float4
+    global_read_vector_type_B = 'float4' if global_read_byte_B >= 4 else 'float2' # J - For "medium" - float4
     
-    global_read_vector_A_length = (int)(global_read_byte_A / len(vector_variable[global_read_vector_type_A]))
-    global_read_vector_B_length = (int)(global_read_byte_B / len(vector_variable[global_read_vector_type_B]))
+    global_read_vector_A_length = (int)(global_read_byte_A / len(vector_variable[global_read_vector_type_A])) # J - For "medium" - int(4/4) = 1
+    global_read_vector_B_length = (int)(global_read_byte_B / len(vector_variable[global_read_vector_type_B])) # J - For "medium" - int(4/4) = 1
     
     shared_read_vector_type_A = 'float4' if mr >= 4 else 'float2'
     shared_read_vector_type_B = 'float4' if nr >= 4 else 'float2'
