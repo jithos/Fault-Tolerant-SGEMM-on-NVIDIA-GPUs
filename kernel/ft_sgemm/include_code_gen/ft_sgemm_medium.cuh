@@ -8,7 +8,9 @@
     c.z = alpha * t.z + beta * c.z; \
     c.w = alpha * t.w + beta * c.w;
     
-__global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, float *A, float *B, float *C, float alpha, float beta, float *check_A_col, float *check_B_row, int *debug_int){
+#define DISABLE_ERROR_CORRECTION
+
+__global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, float *A, float *B, float *C, float alpha, float beta){ // , float *check_A_col, float *check_B_row, int *debug_int){
     // ms = 128, ns = 32, ks = 8
     // mw = 64, nw = 16
     // mr = 8, nr = 4
@@ -175,37 +177,37 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
     B_r += __shfl_xor_sync(0xffffffff, B_r, 4, 32);
 
     // Column checksum accumulation - START
-    const int col_tile = (int)(tx / load_tile_A_num_threads_one_col); // Max value: 64 / 8 = 8
-    const int col_lane = tx % load_tile_A_num_threads_one_col;
+    // const int col_tile = (int)(tx / load_tile_A_num_threads_one_col); // Max value: 64 / 8 = 8
+    // const int col_lane = tx % load_tile_A_num_threads_one_col;
 
-    if (col_lane == 0)
-    {
-        A_col[col_tile] = A_c; // Accumulate column checksum over tile A
-    }
-    __syncthreads();
+    // if (col_lane == 0)
+    // {
+    //     A_col[col_tile] = A_c; // Accumulate column checksum over tile A
+    // }
+    // __syncthreads();
 
-    // Once a block is finished, accumulate all column checksums of the block to the column checksums of the global matrix
-    if (by == 0 && tx < ks)
-    {
-        atomicAdd(&check_A_col[tx], A_col[tx]);
-    }
-    __syncthreads();
+    // // Once a block is finished, accumulate all column checksums of the block to the column checksums of the global matrix
+    // if (by == 0 && tx < ks)
+    // {
+    //     atomicAdd(&check_A_col[tx], A_col[tx]);
+    // }
+    // __syncthreads();
     // Column checksum accumulation - END
     // Row checksum accumulation - START
-    const int row_tile = (int)(tx / load_tile_B_num_threads_one_col); // Max value: 64 / 8 = 8
-    const int row_lane = tx % load_tile_B_num_threads_one_col;
+    // const int row_tile = (int)(tx / load_tile_B_num_threads_one_col); // Max value: 64 / 8 = 8
+    // const int row_lane = tx % load_tile_B_num_threads_one_col;
 
-    if (row_lane == 0)
-    {
-        B_row[row_tile] = B_r; // Accumulate row checksum over tile B
-    }
-    __syncthreads();
+    // if (row_lane == 0)
+    // {
+    //     B_row[row_tile] = B_r; // Accumulate row checksum over tile B
+    // }
+    // __syncthreads();
 
-    if (bx == 0 && tx < ks)
-    {
-        atomicAdd(&check_B_row[tx], B_row[tx]);
-    }
-    __syncthreads();
+    // if (bx == 0 && tx < ks)
+    // {
+    //     atomicAdd(&check_B_row[tx], B_row[tx]);
+    // }
+    // __syncthreads();
     // Row checksum accumulation - END
 
         // saxpy
@@ -308,9 +310,11 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
 
         }
         if(((k+8) %(int(K / 20))) == 0){
-            if(tx == (int)((k+8) / (int(K / 20)))){
-            res[0] += error_inject;
-            }
+            // J -  Turn off error injection
+            // if(tx == (int)((k+8) / (int(K / 20)))){
+            // res[0] += error_inject;
+            // }
+            // C row checksum (4x4 tile C)
             C_r[0 ] = res[0 ]; C_r[0 ] += res[1 ]; C_r[0 ] += res[2 ]; C_r[0 ] += res[3 ]; 
             C_r[1 ] = res[4 ]; C_r[1 ] += res[5 ]; C_r[1 ] += res[6 ]; C_r[1 ] += res[7 ]; 
             C_r[2 ] = res[8 ]; C_r[2 ] += res[9 ]; C_r[2 ] += res[10]; C_r[2 ] += res[11]; 
@@ -368,6 +372,8 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
         __syncthreads();
         tmp_col[0] = (*((float4*)((float*)sAB + (idB_warp * 32 + idB_thread * 4) + 0)));
         tmp_row[0] = (*((float4*)((float*)sAB + ns + (idA_warp * 16 + idA_thread * 4) + 0)));
+        // Turn of error correction for radiation test
+        #ifndef DISABLE_ERROR_CORRECTION
         res[0] += int( (fabsf(*((float*)tmp_row + 0)) > err_bound1) && (fabsf(*((float*)tmp_col + 0)) > err_bound1)) * (*((float*)tmp_row + 0));
         res[1] += int( (fabsf(*((float*)tmp_row + 0)) > err_bound1) && (fabsf(*((float*)tmp_col + 1)) > err_bound1)) * (*((float*)tmp_row + 0));
         res[2] += int( (fabsf(*((float*)tmp_row + 0)) > err_bound1) && (fabsf(*((float*)tmp_col + 2)) > err_bound1)) * (*((float*)tmp_row + 0));
@@ -384,6 +390,7 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
         res[13] += int( (fabsf(*((float*)tmp_row + 3)) > err_bound1) && (fabsf(*((float*)tmp_col + 1)) > err_bound1)) * (*((float*)tmp_row + 3));
         res[14] += int( (fabsf(*((float*)tmp_row + 3)) > err_bound1) && (fabsf(*((float*)tmp_col + 2)) > err_bound1)) * (*((float*)tmp_row + 3));
         res[15] += int( (fabsf(*((float*)tmp_row + 3)) > err_bound1) && (fabsf(*((float*)tmp_col + 3)) > err_bound1)) * (*((float*)tmp_row + 3));
+        #endif
         __syncthreads();
         }
             
@@ -425,45 +432,45 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
         B_r += __shfl_xor_sync(0xffffffff, B_r, 2, 32);
         B_r += __shfl_xor_sync(0xffffffff, B_r, 4, 32);
 
-        // Column checksum accumulation - START
-        const int col_tile = (int)(tx / load_tile_A_num_threads_one_col); // Max value: 64 / 8 = 8
-        const int col_lane = tx % load_tile_A_num_threads_one_col;
+        // // Column checksum accumulation - START
+        // const int col_tile = (int)(tx / load_tile_A_num_threads_one_col); // Max value: 64 / 8 = 8
+        // const int col_lane = tx % load_tile_A_num_threads_one_col;
 
-        if (col_lane == 0)
-        {
-            A_col[col_tile] = A_c; // Accumulate column checksum over tile A
-        }
-        __syncthreads();
+        // if (col_lane == 0)
+        // {
+        //     A_col[col_tile] = A_c; // Accumulate column checksum over tile A
+        // }
+        // __syncthreads();
 
-        // Once a block is finished, accumulate all column checksums of the block to the column checksums of the global matrix
-        if (by == 0 && tx < ks && k + ks < K)
-        {
-            atomicAdd(&check_A_col[(k + ks) + tx], A_col[tx]); // (k + ks) needed due to initial checksum calculation before the K loop
-        }
-        if (bx == 0 && by == 0 && tx == 0){
-            debug_int[0] = (k + ks);
-        }
-        __syncthreads();
-        // Column checksum accumulation - END
-        // Row checksum accumulation - START
-        const int row_tile = (int)(tx / load_tile_B_num_threads_one_col); // Max value: 64 / 8 = 8
-        const int row_lane = tx % load_tile_B_num_threads_one_col;
+        // // Once a block is finished, accumulate all column checksums of the block to the column checksums of the global matrix
+        // if (by == 0 && tx < ks && k + ks < K)
+        // {
+        //     atomicAdd(&check_A_col[(k + ks) + tx], A_col[tx]); // (k + ks) needed due to initial checksum calculation before the K loop
+        // }
+        // if (bx == 0 && by == 0 && tx == 0){
+        //     debug_int[0] = (k + ks);
+        // }
+        // __syncthreads();
+        // // Column checksum accumulation - END
+        // // Row checksum accumulation - START
+        // const int row_tile = (int)(tx / load_tile_B_num_threads_one_col); // Max value: 64 / 8 = 8
+        // const int row_lane = tx % load_tile_B_num_threads_one_col;
 
-        if (row_lane == 0)
-        {
-            B_row[row_tile] = B_r; // Accumulate row checksum over tile B
-        }
-        __syncthreads();
+        // if (row_lane == 0)
+        // {
+        //     B_row[row_tile] = B_r; // Accumulate row checksum over tile B
+        // }
+        // __syncthreads();
 
-        if (bx == 0 && tx < ks && k + ks < K)
-        {
-            atomicAdd(&check_B_row[(k + ks) + tx], B_row[tx]);
-        }
-        if (bx == 0 && by == 0 && tx == 0){
-            debug_int[1] = (k + ks);
-        }
-        __syncthreads();
-        // Row checksum accumulation - END
+        // if (bx == 0 && tx < ks && k + ks < K)
+        // {
+        //     atomicAdd(&check_B_row[(k + ks) + tx], B_row[tx]);
+        // }
+        // if (bx == 0 && by == 0 && tx == 0){
+        //     debug_int[1] = (k + ks);
+        // }
+        // __syncthreads();
+        // // Row checksum accumulation - END
         
         // saxpy
         block_level_A_c[0].x = prefetch_vector_tile_A[0].x * B_r; 

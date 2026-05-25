@@ -187,7 +187,7 @@ else if(kernel_number == 12){
     dim3 blockDim(64);  
     dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
     cudaDeviceSynchronize();  
-    ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC, alpha, beta, dcheck_A_col, dcheck_B_row, d_debug_int);  
+    ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC, alpha, beta); // , dcheck_A_col, dcheck_B_row, d_debug_int);  
     }                
 }      
 else if(kernel_number == 13){   
@@ -255,13 +255,22 @@ cudaDeviceSynchronize();
 cudaMemcpy(C_ref, dC_ref, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
 cudaDeviceSynchronize();                                                                    
 
-// Jithin - DEBUGGING START
-cudaMemcpy(check_A_col, dcheck_A_col, sizeof(float) * MAX_SIZE, cudaMemcpyDeviceToHost);
-cudaDeviceSynchronize();
-cudaMemcpy(check_B_row, dcheck_B_row, sizeof(float) * MAX_SIZE, cudaMemcpyDeviceToHost);
-cudaDeviceSynchronize();
-cudaMemcpy(debug_int, d_debug_int, sizeof(int)*10, cudaMemcpyDeviceToHost);
-cudaDeviceSynchronize();
+// J - DEBUGGING START
+// cudaMemcpy(check_A_col, dcheck_A_col, sizeof(float) * MAX_SIZE, cudaMemcpyDeviceToHost);
+// cudaDeviceSynchronize();
+// cudaMemcpy(check_B_row, dcheck_B_row, sizeof(float) * MAX_SIZE, cudaMemcpyDeviceToHost);
+// cudaDeviceSynchronize();
+// cudaMemcpy(debug_int, d_debug_int, sizeof(int)*10, cudaMemcpyDeviceToHost);
+// cudaDeviceSynchronize();
+
+for (int i=0; i<M; i++)
+{
+    for (int j=0; j<N; j++)
+    {
+        check_C_col[j] += C[j * M + i];
+        check_C_row[i] += C[j * M + i];
+    }    
+}
 
 int rows = 5;
 int columns = 10;
@@ -301,27 +310,28 @@ printf("--- A column checksums -------------------------------\n");
 // Print checksum values
 // for (int i=0; i<columns; i++)
 // {
-//     printf("%f, ", check_A_col[i + column_start]);
+//     printf("%f, ", check_C_col[i + column_start]);
 // }
 int col_count = 0, row_count = 0;
 int failed_columns[MAX_SIZE], failed_rows[MAX_SIZE];
 int failed_col_values[MAX_SIZE], failed_row_values[MAX_SIZE];
 for (int i=0; i<MAX_SIZE; i++)
 {
-    if (check_A_col[i] != MAX_SIZE)
+    if (check_C_col[i] != MAX_SIZE)
     {
         failed_columns[col_count] = i;
-        failed_col_values[col_count] = check_A_col[i];
+        failed_col_values[col_count] = check_C_col[i];
         col_count++;
     }
-    if (check_B_row[i] != 1)
+    if (check_C_row[i] != MAX_SIZE)
     {
         failed_rows[row_count] = i;
-        failed_row_values[row_count] = check_B_row[i];
+        failed_row_values[row_count] = check_C_row[i];
         row_count++;
     }
 }
 printf("Number of column failures: %d\n", col_count);
+printf("Number of row failures: %d\n", row_count);
 printf("Failed columns: ");
 for (int i=0; i<col_count; i++)
 {
@@ -492,7 +502,7 @@ for(int jj = 0; jj < 15; ++jj){
         dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
         for(int ii = 0; ii < num_tests; ++ii){
             cudaDeviceSynchronize();
-            ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC, alpha, beta, dcheck_A_col, dcheck_B_row, d_debug_int);
+            ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC, alpha, beta); // , dcheck_A_col, dcheck_B_row, d_debug_int);
             cudaDeviceSynchronize();
         }
         cudaEventRecord(end);     
