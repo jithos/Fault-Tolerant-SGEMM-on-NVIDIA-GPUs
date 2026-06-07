@@ -23,7 +23,9 @@ void generate_random_vector(float* target, int n){
 void generate_random_matrix(float* target, int n){
     for(int i = 0; i < n; ++i){
 	for(int j = 0; j < n; ++j){
-        float tmp = (float)(rand() % 10) * 0.1;
+        // float tmp = (float)(rand() % 10) * 0.1;
+        float tmp = (float)(rand()) / (float)(rand());
+        tmp = tmp < 10. ? tmp : 1 / tmp; // limit values to be below 10
         tmp = (rand() % 2 == 0) ? tmp : tmp * (-1.);     
    	target[i * n + j] = tmp;
 	}
