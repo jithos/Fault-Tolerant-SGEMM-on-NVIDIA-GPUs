@@ -53,6 +53,7 @@ __global__  __launch_bounds__(64) void ft_sgemm_small(int M, int N, int K, float
     
     // thread tx load 8 floats with rows = [(tx % 16 threads) * 8, (tx % 16 threads) * 8 + 7],
     //                              col  = (tx / 16 threads) of tile A
+    // NOTE - Jithin: Counts f(tx=0)=0, f(tx=1)=4, f(tx=2)=8, f(tx=3)=12 then it jumpts to f(tx=4)=0+M, f(tx=5)=4+M, ... until we iterate over 16 rows in the A matrix
     A += (tx % load_tile_A_num_threads_one_col) * (load_tile_A_num_floats_one_thread) + (int)(tx / load_tile_A_num_threads_one_col) * M;
 
     // tile B inner offset.
@@ -62,6 +63,7 @@ __global__  __launch_bounds__(64) void ft_sgemm_small(int M, int N, int K, float
     int load_tile_B_num_threads_one_col = (int)(ns / load_tile_B_num_floats_one_thread);
     // thread tx load 8 floats with rows = [(tx % 16 threads) * 2, (tx % 16 threads) * 2 + 1],
     //                              col  = (tx / 16 threads) of tile A
+    // NOTE - Jithin: Similar to above, but we iterate over 16 columns in the B matrix
     B += (tx % load_tile_B_num_threads_one_col) * (load_tile_B_num_floats_one_thread) + (int)(tx / load_tile_B_num_threads_one_col) * N;
 
     // prefetch the vector from A and B in global memory 

@@ -9,14 +9,14 @@
 #define FT_SGEMM_MEDIUM_96_THREAD_COLS 6
 
 __global__ __launch_bounds__(96) void ft_sgemm_medium_96(int M, int N, int K, float *A, float *B, float *C, float alpha, float beta){
-    __shared__ float tileA[FT_SGEMM_MEDIUM_96_M * FT_SGEMM_MEDIUM_96_K];
-    __shared__ float tileB[FT_SGEMM_MEDIUM_96_N * FT_SGEMM_MEDIUM_96_K];
+    __shared__ float tileA[FT_SGEMM_MEDIUM_96_M * FT_SGEMM_MEDIUM_96_K]; // Jithin - tileA[48*8]
+    __shared__ float tileB[FT_SGEMM_MEDIUM_96_N * FT_SGEMM_MEDIUM_96_K]; // Jithin - tileB[48*8]
 
     const int tx = threadIdx.x;
     const int bx = blockIdx.x;
     const int by = blockIdx.y;
-    const int warp_id = tx / FT_SGEMM_MEDIUM_96_WARP_SIZE;
-    const int lane_id = tx & (FT_SGEMM_MEDIUM_96_WARP_SIZE - 1);
+    const int warp_id = tx / FT_SGEMM_MEDIUM_96_WARP_SIZE; // Jithin - tx / 32, BUG check if 31/32 = 0, else this is wrong
+    const int lane_id = tx & (FT_SGEMM_MEDIUM_96_WARP_SIZE - 1); // Jithin - tx & 31, BUG this does not give lane ID in power of 2
 
     const int block_row = bx * FT_SGEMM_MEDIUM_96_M;
     const int block_col = by * FT_SGEMM_MEDIUM_96_N;
