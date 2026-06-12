@@ -8,7 +8,7 @@
     c.z = alpha * t.z + beta * c.z; \
     c.w = alpha * t.w + beta * c.w;
     
-#define DISABLE_ERROR_CORRECTION
+// #define DISABLE_ERROR_CORRECTION
 
 __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, float *A, float *B, float *C, float alpha, float beta){ // , float *check_A_col, float *check_B_row, int *debug_int){
     // ms = 128, ns = 32, ks = 8
