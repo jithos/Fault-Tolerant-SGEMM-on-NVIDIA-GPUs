@@ -122,8 +122,8 @@ S_2_M = {
 EXPERIMENT_NAME = "vanilla"
 # EXPERIMENT_NAME = "detection"
 
-FT_SGEMM_PATH = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs/build"
-EXPERIMENT_PATH = f"{FT_SGEMM_PATH}/ncu_exp_{EXPERIMENT_NAME}"
+FT_SGEMM_PATH = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs"
+EXPERIMENT_PATH = f"{FT_SGEMM_PATH}/profiling_results/ncu_exp_{EXPERIMENT_NAME}"
 NCU_RESULTS_CSV_PATH = f"{EXPERIMENT_PATH}/ncu_results_csv"
 PLOT_PATH = f"{EXPERIMENT_PATH}/plots"
 

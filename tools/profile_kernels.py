@@ -52,8 +52,8 @@ METRICS = [
 EXPERIMENT_NAME = "detection"
 
 NCU_PATH = "/opt/nvidia/nsight-compute/2024.3.1/target/linux-v4l_l4t-t210-a64/ncu"
-FT_SGEMM_PATH = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs/build"
-EXPERIMENT_PATH = f"{FT_SGEMM_PATH}/ncu_exp_{EXPERIMENT_NAME}"
+FT_SGEMM_PATH = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs"
+EXPERIMENT_PATH = f"{FT_SGEMM_PATH}/profiling_results/ncu_exp_{EXPERIMENT_NAME}"
 NCU_RESULTS_PATH = f"{EXPERIMENT_PATH}/ncu_results"
 
 METRIC_CSV_FILE = f"{EXPERIMENT_PATH}/ncu_metric_results.csv"
