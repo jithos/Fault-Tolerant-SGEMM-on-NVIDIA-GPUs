@@ -1,0 +1,289 @@
+Kernel Name,Kernel Size,Section,Metric Name,Metric Unit,Value
+ft_sgemm_medium,1024.0,speed_of_light,SM Frequency,Mhz,305.99
+ft_sgemm_medium,1024.0,speed_of_light,Elapsed Cycles,cycle,3447174
+ft_sgemm_medium,1024.0,speed_of_light,Memory Throughput,%,92.15
+ft_sgemm_medium,1024.0,speed_of_light,Duration,s,0.011269999999999999
+ft_sgemm_medium,1024.0,speed_of_light,L1/TEX Cache Throughput,%,92.28
+ft_sgemm_medium,1024.0,speed_of_light,L2 Cache Throughput,%,43.92
+ft_sgemm_medium,1024.0,speed_of_light,SM Active Cycles,cycle,3438648.50
+ft_sgemm_medium,1024.0,speed_of_light,Compute (SM) Throughput,%,60.13
+ft_sgemm_medium,1024.0,launch_statistics,Block Size,,64
+ft_sgemm_medium,1024.0,launch_statistics,Function Cache Configuration,,CachePreferNone
+ft_sgemm_medium,1024.0,launch_statistics,Grid Size,,1024
+ft_sgemm_medium,1024.0,launch_statistics,Registers Per Thread,register/thread,64
+ft_sgemm_medium,1024.0,launch_statistics,Shared Memory Configuration Size,Kbyte,102.40
+ft_sgemm_medium,1024.0,launch_statistics,Driver Shared Memory Per Block,Kbyte/block,1.02
+ft_sgemm_medium,1024.0,launch_statistics,Dynamic Shared Memory Per Block,byte/block,0
+ft_sgemm_medium,1024.0,launch_statistics,Static Shared Memory Per Block,Kbyte/block,4.13
+ft_sgemm_medium,1024.0,launch_statistics,# SMs,SM,8
+ft_sgemm_medium,1024.0,launch_statistics,Threads,thread,65536
+ft_sgemm_medium,1024.0,launch_statistics,Uses Green Context,,0
+ft_sgemm_medium,1024.0,launch_statistics,Waves Per SM,,8
+ft_sgemm_medium,1024.0,occupancy,Block Limit SM,block,16
+ft_sgemm_medium,1024.0,occupancy,Block Limit Registers,block,16
+ft_sgemm_medium,1024.0,occupancy,Block Limit Shared Mem,block,19
+ft_sgemm_medium,1024.0,occupancy,Block Limit Warps,block,24
+ft_sgemm_medium,1024.0,occupancy,Theoretical Active Warps per SM,warp,32
+ft_sgemm_medium,1024.0,occupancy,Theoretical Occupancy,%,66.67
+ft_sgemm_medium,1024.0,occupancy,Achieved Occupancy,%,64.53
+ft_sgemm_medium,1024.0,occupancy,Achieved Active Warps Per SM,warp,30.97
+ft_sgemm_medium,1024.0,gpu_and_memory_workload,Average L1 Active Cycles,cycle,3438648.50
+ft_sgemm_medium,1024.0,gpu_and_memory_workload,Total L1 Elapsed Cycles,cycle,27550184
+ft_sgemm_medium,1024.0,gpu_and_memory_workload,Average L2 Active Cycles,cycle,3431692.50
+ft_sgemm_medium,1024.0,gpu_and_memory_workload,Total L2 Elapsed Cycles,cycle,13788692
+ft_sgemm_medium,1024.0,gpu_and_memory_workload,Average SM Active Cycles,cycle,3438648.50
+ft_sgemm_medium,1024.0,gpu_and_memory_workload,Total SM Elapsed Cycles,cycle,27550184
+ft_sgemm_medium,1024.0,gpu_and_memory_workload,Average SMSP Active Cycles,cycle,3438360.22
+ft_sgemm_medium,1024.0,gpu_and_memory_workload,Total SMSP Elapsed Cycles,cycle,110200736
+ft_sgemm_medium,2048.0,speed_of_light,SM Frequency,Mhz,306.00
+ft_sgemm_medium,2048.0,speed_of_light,Elapsed Cycles,cycle,27381079
+ft_sgemm_medium,2048.0,speed_of_light,Memory Throughput,%,87.65
+ft_sgemm_medium,2048.0,speed_of_light,Duration,s,0.08948
+ft_sgemm_medium,2048.0,speed_of_light,L1/TEX Cache Throughput,%,92.57
+ft_sgemm_medium,2048.0,speed_of_light,L2 Cache Throughput,%,46.25
+ft_sgemm_medium,2048.0,speed_of_light,SM Active Cycles,cycle,27372739.12
+ft_sgemm_medium,2048.0,speed_of_light,Compute (SM) Throughput,%,57.16
+ft_sgemm_medium,2048.0,launch_statistics,Block Size,,64
+ft_sgemm_medium,2048.0,launch_statistics,Function Cache Configuration,,CachePreferNone
+ft_sgemm_medium,2048.0,launch_statistics,Grid Size,,4096
+ft_sgemm_medium,2048.0,launch_statistics,Registers Per Thread,register/thread,64
+ft_sgemm_medium,2048.0,launch_statistics,Shared Memory Configuration Size,Kbyte,102.40
+ft_sgemm_medium,2048.0,launch_statistics,Driver Shared Memory Per Block,Kbyte/block,1.02
+ft_sgemm_medium,2048.0,launch_statistics,Dynamic Shared Memory Per Block,byte/block,0
+ft_sgemm_medium,2048.0,launch_statistics,Static Shared Memory Per Block,Kbyte/block,4.13
+ft_sgemm_medium,2048.0,launch_statistics,# SMs,SM,8
+ft_sgemm_medium,2048.0,launch_statistics,Threads,thread,262144
+ft_sgemm_medium,2048.0,launch_statistics,Uses Green Context,,0
+ft_sgemm_medium,2048.0,launch_statistics,Waves Per SM,,32
+ft_sgemm_medium,2048.0,occupancy,Block Limit SM,block,16
+ft_sgemm_medium,2048.0,occupancy,Block Limit Registers,block,16
+ft_sgemm_medium,2048.0,occupancy,Block Limit Shared Mem,block,19
+ft_sgemm_medium,2048.0,occupancy,Block Limit Warps,block,24
+ft_sgemm_medium,2048.0,occupancy,Theoretical Active Warps per SM,warp,32
+ft_sgemm_medium,2048.0,occupancy,Theoretical Occupancy,%,66.67
+ft_sgemm_medium,2048.0,occupancy,Achieved Occupancy,%,66.05
+ft_sgemm_medium,2048.0,occupancy,Achieved Active Warps Per SM,warp,31.70
+ft_sgemm_medium,2048.0,gpu_and_memory_workload,Average L1 Active Cycles,cycle,27372739.12
+ft_sgemm_medium,2048.0,gpu_and_memory_workload,Total L1 Elapsed Cycles,cycle,231296456
+ft_sgemm_medium,2048.0,gpu_and_memory_workload,Average L2 Active Cycles,cycle,27376851.25
+ft_sgemm_medium,2048.0,gpu_and_memory_workload,Total L2 Elapsed Cycles,cycle,109524296
+ft_sgemm_medium,2048.0,gpu_and_memory_workload,Average SM Active Cycles,cycle,27372739.12
+ft_sgemm_medium,2048.0,gpu_and_memory_workload,Total SM Elapsed Cycles,cycle,231296456
+ft_sgemm_medium,2048.0,gpu_and_memory_workload,Average SMSP Active Cycles,cycle,27375497.16
+ft_sgemm_medium,2048.0,gpu_and_memory_workload,Total SMSP Elapsed Cycles,cycle,925185824
+ft_sgemm_medium,3072.0,speed_of_light,SM Frequency,Mhz,408.00
+ft_sgemm_medium,3072.0,speed_of_light,Elapsed Cycles,cycle,91295117
+ft_sgemm_medium,3072.0,speed_of_light,Memory Throughput,%,92.18
+ft_sgemm_medium,3072.0,speed_of_light,Duration,s,0.22376
+ft_sgemm_medium,3072.0,speed_of_light,L1/TEX Cache Throughput,%,92.41
+ft_sgemm_medium,3072.0,speed_of_light,L2 Cache Throughput,%,49.20
+ft_sgemm_medium,3072.0,speed_of_light,SM Active Cycles,cycle,91295366.88
+ft_sgemm_medium,3072.0,speed_of_light,Compute (SM) Throughput,%,60.31
+ft_sgemm_medium,3072.0,launch_statistics,Block Size,,64
+ft_sgemm_medium,3072.0,launch_statistics,Function Cache Configuration,,CachePreferNone
+ft_sgemm_medium,3072.0,launch_statistics,Grid Size,,9216
+ft_sgemm_medium,3072.0,launch_statistics,Registers Per Thread,register/thread,64
+ft_sgemm_medium,3072.0,launch_statistics,Shared Memory Configuration Size,Kbyte,102.40
+ft_sgemm_medium,3072.0,launch_statistics,Driver Shared Memory Per Block,Kbyte/block,1.02
+ft_sgemm_medium,3072.0,launch_statistics,Dynamic Shared Memory Per Block,byte/block,0
+ft_sgemm_medium,3072.0,launch_statistics,Static Shared Memory Per Block,Kbyte/block,4.13
+ft_sgemm_medium,3072.0,launch_statistics,# SMs,SM,8
+ft_sgemm_medium,3072.0,launch_statistics,Threads,thread,589824
+ft_sgemm_medium,3072.0,launch_statistics,Uses Green Context,,0
+ft_sgemm_medium,3072.0,launch_statistics,Waves Per SM,,72
+ft_sgemm_medium,3072.0,occupancy,Block Limit SM,block,16
+ft_sgemm_medium,3072.0,occupancy,Block Limit Registers,block,16
+ft_sgemm_medium,3072.0,occupancy,Block Limit Shared Mem,block,19
+ft_sgemm_medium,3072.0,occupancy,Block Limit Warps,block,24
+ft_sgemm_medium,3072.0,occupancy,Theoretical Active Warps per SM,warp,32
+ft_sgemm_medium,3072.0,occupancy,Theoretical Occupancy,%,66.67
+ft_sgemm_medium,3072.0,occupancy,Achieved Occupancy,%,66.37
+ft_sgemm_medium,3072.0,occupancy,Achieved Active Warps Per SM,warp,31.86
+ft_sgemm_medium,3072.0,gpu_and_memory_workload,Average L1 Active Cycles,cycle,91295366.88
+ft_sgemm_medium,3072.0,gpu_and_memory_workload,Total L1 Elapsed Cycles,cycle,732210256
+ft_sgemm_medium,3072.0,gpu_and_memory_workload,Average L2 Active Cycles,cycle,91491320.50
+ft_sgemm_medium,3072.0,gpu_and_memory_workload,Total L2 Elapsed Cycles,cycle,365180428
+ft_sgemm_medium,3072.0,gpu_and_memory_workload,Average SM Active Cycles,cycle,91295366.88
+ft_sgemm_medium,3072.0,gpu_and_memory_workload,Total SM Elapsed Cycles,cycle,732210256
+ft_sgemm_medium,3072.0,gpu_and_memory_workload,Average SMSP Active Cycles,cycle,91264899.25
+ft_sgemm_medium,3072.0,gpu_and_memory_workload,Total SMSP Elapsed Cycles,cycle,2928841024
+ft_sgemm_medium,4096.0,speed_of_light,SM Frequency,Mhz,299.00
+ft_sgemm_medium,4096.0,speed_of_light,Elapsed Cycles,cycle,228717007
+ft_sgemm_medium,4096.0,speed_of_light,Memory Throughput,%,90.08
+ft_sgemm_medium,4096.0,speed_of_light,Duration,s,0.7649400000000001
+ft_sgemm_medium,4096.0,speed_of_light,L1/TEX Cache Throughput,%,92.65
+ft_sgemm_medium,4096.0,speed_of_light,L2 Cache Throughput,%,48.41
+ft_sgemm_medium,4096.0,speed_of_light,SM Active Cycles,cycle,218174849.25
+ft_sgemm_medium,4096.0,speed_of_light,Compute (SM) Throughput,%,58.79
+ft_sgemm_medium,4096.0,launch_statistics,Block Size,,64
+ft_sgemm_medium,4096.0,launch_statistics,Function Cache Configuration,,CachePreferNone
+ft_sgemm_medium,4096.0,launch_statistics,Grid Size,,16384
+ft_sgemm_medium,4096.0,launch_statistics,Registers Per Thread,register/thread,64
+ft_sgemm_medium,4096.0,launch_statistics,Shared Memory Configuration Size,Kbyte,102.40
+ft_sgemm_medium,4096.0,launch_statistics,Driver Shared Memory Per Block,Kbyte/block,1.02
+ft_sgemm_medium,4096.0,launch_statistics,Dynamic Shared Memory Per Block,byte/block,0
+ft_sgemm_medium,4096.0,launch_statistics,Static Shared Memory Per Block,Kbyte/block,4.13
+ft_sgemm_medium,4096.0,launch_statistics,# SMs,SM,8
+ft_sgemm_medium,4096.0,launch_statistics,Threads,thread,1048576
+ft_sgemm_medium,4096.0,launch_statistics,Uses Green Context,,0
+ft_sgemm_medium,4096.0,launch_statistics,Waves Per SM,,128
+ft_sgemm_medium,4096.0,occupancy,Block Limit SM,block,16
+ft_sgemm_medium,4096.0,occupancy,Block Limit Registers,block,16
+ft_sgemm_medium,4096.0,occupancy,Block Limit Shared Mem,block,19
+ft_sgemm_medium,4096.0,occupancy,Block Limit Warps,block,24
+ft_sgemm_medium,4096.0,occupancy,Theoretical Active Warps per SM,warp,32
+ft_sgemm_medium,4096.0,occupancy,Theoretical Occupancy,%,66.67
+ft_sgemm_medium,4096.0,occupancy,Achieved Occupancy,%,66.19
+ft_sgemm_medium,4096.0,occupancy,Achieved Active Warps Per SM,warp,31.77
+ft_sgemm_medium,4096.0,gpu_and_memory_workload,Average L1 Active Cycles,cycle,218174849.25
+ft_sgemm_medium,4096.0,gpu_and_memory_workload,Total L1 Elapsed Cycles,cycle,1795215704
+ft_sgemm_medium,4096.0,gpu_and_memory_workload,Average L2 Active Cycles,cycle,224160333
+ft_sgemm_medium,4096.0,gpu_and_memory_workload,Total L2 Elapsed Cycles,cycle,914867284
+ft_sgemm_medium,4096.0,gpu_and_memory_workload,Average SM Active Cycles,cycle,218174849.25
+ft_sgemm_medium,4096.0,gpu_and_memory_workload,Total SM Elapsed Cycles,cycle,1795215704
+ft_sgemm_medium,4096.0,gpu_and_memory_workload,Average SMSP Active Cycles,cycle,218160227.88
+ft_sgemm_medium,4096.0,gpu_and_memory_workload,Total SMSP Elapsed Cycles,cycle,7180862816
+ft_sgemm_medium,5120.0,speed_of_light,SM Frequency,Mhz,376.39
+ft_sgemm_medium,5120.0,speed_of_light,Elapsed Cycles,cycle,435419864
+ft_sgemm_medium,5120.0,speed_of_light,Memory Throughput,%,91.29
+ft_sgemm_medium,5120.0,speed_of_light,Duration,s,1.16
+ft_sgemm_medium,5120.0,speed_of_light,L1/TEX Cache Throughput,%,92.71
+ft_sgemm_medium,5120.0,speed_of_light,L2 Cache Throughput,%,49.85
+ft_sgemm_medium,5120.0,speed_of_light,SM Active Cycles,cycle,429814500.75
+ft_sgemm_medium,5120.0,speed_of_light,Compute (SM) Throughput,%,59.42
+ft_sgemm_medium,5120.0,launch_statistics,Block Size,,64
+ft_sgemm_medium,5120.0,launch_statistics,Function Cache Configuration,,CachePreferNone
+ft_sgemm_medium,5120.0,launch_statistics,Grid Size,,25600
+ft_sgemm_medium,5120.0,launch_statistics,Registers Per Thread,register/thread,64
+ft_sgemm_medium,5120.0,launch_statistics,Shared Memory Configuration Size,Kbyte,102.40
+ft_sgemm_medium,5120.0,launch_statistics,Driver Shared Memory Per Block,Kbyte/block,1.02
+ft_sgemm_medium,5120.0,launch_statistics,Dynamic Shared Memory Per Block,byte/block,0
+ft_sgemm_medium,5120.0,launch_statistics,Static Shared Memory Per Block,Kbyte/block,4.13
+ft_sgemm_medium,5120.0,launch_statistics,# SMs,SM,8
+ft_sgemm_medium,5120.0,launch_statistics,Threads,thread,1638400
+ft_sgemm_medium,5120.0,launch_statistics,Uses Green Context,,0
+ft_sgemm_medium,5120.0,launch_statistics,Waves Per SM,,200
+ft_sgemm_medium,5120.0,occupancy,Block Limit SM,block,16
+ft_sgemm_medium,5120.0,occupancy,Block Limit Registers,block,16
+ft_sgemm_medium,5120.0,occupancy,Block Limit Shared Mem,block,19
+ft_sgemm_medium,5120.0,occupancy,Block Limit Warps,block,24
+ft_sgemm_medium,5120.0,occupancy,Theoretical Active Warps per SM,warp,32
+ft_sgemm_medium,5120.0,occupancy,Theoretical Occupancy,%,66.67
+ft_sgemm_medium,5120.0,occupancy,Achieved Occupancy,%,66.42
+ft_sgemm_medium,5120.0,occupancy,Achieved Active Warps Per SM,warp,31.88
+ft_sgemm_medium,5120.0,gpu_and_memory_workload,Average L1 Active Cycles,cycle,429814500.75
+ft_sgemm_medium,5120.0,gpu_and_memory_workload,Total L1 Elapsed Cycles,cycle,3492311256
+ft_sgemm_medium,5120.0,gpu_and_memory_workload,Average L2 Active Cycles,cycle,435432744.50
+ft_sgemm_medium,5120.0,gpu_and_memory_workload,Total L2 Elapsed Cycles,cycle,1741678132
+ft_sgemm_medium,5120.0,gpu_and_memory_workload,Average SM Active Cycles,cycle,429814500.75
+ft_sgemm_medium,5120.0,gpu_and_memory_workload,Total SM Elapsed Cycles,cycle,3492311256
+ft_sgemm_medium,5120.0,gpu_and_memory_workload,Average SMSP Active Cycles,cycle,429228901.47
+ft_sgemm_medium,5120.0,gpu_and_memory_workload,Total SMSP Elapsed Cycles,cycle,13969245024
+ft_sgemm_medium,6144.0,speed_of_light,SM Frequency,Mhz,371.27
+ft_sgemm_medium,6144.0,speed_of_light,Elapsed Cycles,cycle,740719283
+ft_sgemm_medium,6144.0,speed_of_light,Memory Throughput,%,90.60
+ft_sgemm_medium,6144.0,speed_of_light,Duration,s,2.00
+ft_sgemm_medium,6144.0,speed_of_light,L1/TEX Cache Throughput,%,92.30
+ft_sgemm_medium,6144.0,speed_of_light,L2 Cache Throughput,%,50.41
+ft_sgemm_medium,6144.0,speed_of_light,SM Active Cycles,cycle,728500620.25
+ft_sgemm_medium,6144.0,speed_of_light,Compute (SM) Throughput,%,59.32
+ft_sgemm_medium,6144.0,launch_statistics,Block Size,,64
+ft_sgemm_medium,6144.0,launch_statistics,Function Cache Configuration,,CachePreferNone
+ft_sgemm_medium,6144.0,launch_statistics,Grid Size,,36864
+ft_sgemm_medium,6144.0,launch_statistics,Registers Per Thread,register/thread,64
+ft_sgemm_medium,6144.0,launch_statistics,Shared Memory Configuration Size,Kbyte,102.40
+ft_sgemm_medium,6144.0,launch_statistics,Driver Shared Memory Per Block,Kbyte/block,1.02
+ft_sgemm_medium,6144.0,launch_statistics,Dynamic Shared Memory Per Block,byte/block,0
+ft_sgemm_medium,6144.0,launch_statistics,Static Shared Memory Per Block,Kbyte/block,4.13
+ft_sgemm_medium,6144.0,launch_statistics,# SMs,SM,8
+ft_sgemm_medium,6144.0,launch_statistics,Threads,thread,2359296
+ft_sgemm_medium,6144.0,launch_statistics,Uses Green Context,,0
+ft_sgemm_medium,6144.0,launch_statistics,Waves Per SM,,288
+ft_sgemm_medium,6144.0,occupancy,Block Limit SM,block,16
+ft_sgemm_medium,6144.0,occupancy,Block Limit Registers,block,16
+ft_sgemm_medium,6144.0,occupancy,Block Limit Shared Mem,block,19
+ft_sgemm_medium,6144.0,occupancy,Block Limit Warps,block,24
+ft_sgemm_medium,6144.0,occupancy,Theoretical Active Warps per SM,warp,32
+ft_sgemm_medium,6144.0,occupancy,Theoretical Occupancy,%,66.67
+ft_sgemm_medium,6144.0,occupancy,Achieved Occupancy,%,66.45
+ft_sgemm_medium,6144.0,occupancy,Achieved Active Warps Per SM,warp,31.90
+ft_sgemm_medium,6144.0,gpu_and_memory_workload,Average L1 Active Cycles,cycle,728500620.25
+ft_sgemm_medium,6144.0,gpu_and_memory_workload,Total L1 Elapsed Cycles,cycle,5937526536
+ft_sgemm_medium,6144.0,gpu_and_memory_workload,Average L2 Active Cycles,cycle,739392546.50
+ft_sgemm_medium,6144.0,gpu_and_memory_workload,Total L2 Elapsed Cycles,cycle,2962876772
+ft_sgemm_medium,6144.0,gpu_and_memory_workload,Average SM Active Cycles,cycle,728500620.25
+ft_sgemm_medium,6144.0,gpu_and_memory_workload,Total SM Elapsed Cycles,cycle,5937526536
+ft_sgemm_medium,6144.0,gpu_and_memory_workload,Average SMSP Active Cycles,cycle,729666308.66
+ft_sgemm_medium,6144.0,gpu_and_memory_workload,Total SMSP Elapsed Cycles,cycle,23750106144
+ft_sgemm_medium,7168.0,speed_of_light,SM Frequency,Mhz,369.03
+ft_sgemm_medium,7168.0,speed_of_light,Elapsed Cycles,cycle,1909991003
+ft_sgemm_medium,7168.0,speed_of_light,Memory Throughput,%,53.12
+ft_sgemm_medium,7168.0,speed_of_light,Duration,s,5.18
+ft_sgemm_medium,7168.0,speed_of_light,L1/TEX Cache Throughput,%,56.64
+ft_sgemm_medium,7168.0,speed_of_light,L2 Cache Throughput,%,32.61
+ft_sgemm_medium,7168.0,speed_of_light,SM Active Cycles,cycle,1888551551.38
+ft_sgemm_medium,7168.0,speed_of_light,Compute (SM) Throughput,%,34.77
+ft_sgemm_medium,7168.0,launch_statistics,Block Size,,64
+ft_sgemm_medium,7168.0,launch_statistics,Function Cache Configuration,,CachePreferNone
+ft_sgemm_medium,7168.0,launch_statistics,Grid Size,,50176
+ft_sgemm_medium,7168.0,launch_statistics,Registers Per Thread,register/thread,64
+ft_sgemm_medium,7168.0,launch_statistics,Shared Memory Configuration Size,Kbyte,102.40
+ft_sgemm_medium,7168.0,launch_statistics,Driver Shared Memory Per Block,Kbyte/block,1.02
+ft_sgemm_medium,7168.0,launch_statistics,Dynamic Shared Memory Per Block,byte/block,0
+ft_sgemm_medium,7168.0,launch_statistics,Static Shared Memory Per Block,Kbyte/block,4.13
+ft_sgemm_medium,7168.0,launch_statistics,# SMs,SM,8
+ft_sgemm_medium,7168.0,launch_statistics,Threads,thread,3211264
+ft_sgemm_medium,7168.0,launch_statistics,Uses Green Context,,0
+ft_sgemm_medium,7168.0,launch_statistics,Waves Per SM,,392
+ft_sgemm_medium,7168.0,occupancy,Block Limit SM,block,16
+ft_sgemm_medium,7168.0,occupancy,Block Limit Registers,block,16
+ft_sgemm_medium,7168.0,occupancy,Block Limit Shared Mem,block,19
+ft_sgemm_medium,7168.0,occupancy,Block Limit Warps,block,24
+ft_sgemm_medium,7168.0,occupancy,Theoretical Active Warps per SM,warp,32
+ft_sgemm_medium,7168.0,occupancy,Theoretical Occupancy,%,66.67
+ft_sgemm_medium,7168.0,occupancy,Achieved Occupancy,%,66.50
+ft_sgemm_medium,7168.0,occupancy,Achieved Active Warps Per SM,warp,31.92
+ft_sgemm_medium,7168.0,gpu_and_memory_workload,Average L1 Active Cycles,cycle,1888551551.38
+ft_sgemm_medium,7168.0,gpu_and_memory_workload,Total L1 Elapsed Cycles,cycle,16109829952
+ft_sgemm_medium,7168.0,gpu_and_memory_workload,Average L2 Active Cycles,cycle,1961239768.25
+ft_sgemm_medium,7168.0,gpu_and_memory_workload,Total L2 Elapsed Cycles,cycle,7639962036
+ft_sgemm_medium,7168.0,gpu_and_memory_workload,Average SM Active Cycles,cycle,1888551551.38
+ft_sgemm_medium,7168.0,gpu_and_memory_workload,Total SM Elapsed Cycles,cycle,16109829952
+ft_sgemm_medium,7168.0,gpu_and_memory_workload,Average SMSP Active Cycles,cycle,1850153645.97
+ft_sgemm_medium,7168.0,gpu_and_memory_workload,Total SMSP Elapsed Cycles,cycle,64439319808
+ft_sgemm_medium,8192.0,speed_of_light,SM Frequency,Mhz,369.87
+ft_sgemm_medium,8192.0,speed_of_light,Elapsed Cycles,cycle,5507551759
+ft_sgemm_medium,8192.0,speed_of_light,Memory Throughput,%,29.83
+ft_sgemm_medium,8192.0,speed_of_light,Duration,s,14.89
+ft_sgemm_medium,8192.0,speed_of_light,L1/TEX Cache Throughput,%,29.78
+ft_sgemm_medium,8192.0,speed_of_light,L2 Cache Throughput,%,18.27
+ft_sgemm_medium,8192.0,speed_of_light,SM Active Cycles,cycle,5341871381.25
+ft_sgemm_medium,8192.0,speed_of_light,Compute (SM) Throughput,%,19.55
+ft_sgemm_medium,8192.0,launch_statistics,Block Size,,64
+ft_sgemm_medium,8192.0,launch_statistics,Function Cache Configuration,,CachePreferNone
+ft_sgemm_medium,8192.0,launch_statistics,Grid Size,,65536
+ft_sgemm_medium,8192.0,launch_statistics,Registers Per Thread,register/thread,64
+ft_sgemm_medium,8192.0,launch_statistics,Shared Memory Configuration Size,Kbyte,102.40
+ft_sgemm_medium,8192.0,launch_statistics,Driver Shared Memory Per Block,Kbyte/block,1.02
+ft_sgemm_medium,8192.0,launch_statistics,Dynamic Shared Memory Per Block,byte/block,0
+ft_sgemm_medium,8192.0,launch_statistics,Static Shared Memory Per Block,Kbyte/block,4.13
+ft_sgemm_medium,8192.0,launch_statistics,# SMs,SM,8
+ft_sgemm_medium,8192.0,launch_statistics,Threads,thread,4194304
+ft_sgemm_medium,8192.0,launch_statistics,Uses Green Context,,0
+ft_sgemm_medium,8192.0,launch_statistics,Waves Per SM,,512
+ft_sgemm_medium,8192.0,occupancy,Block Limit SM,block,16
+ft_sgemm_medium,8192.0,occupancy,Block Limit Registers,block,16
+ft_sgemm_medium,8192.0,occupancy,Block Limit Shared Mem,block,19
+ft_sgemm_medium,8192.0,occupancy,Block Limit Warps,block,24
+ft_sgemm_medium,8192.0,occupancy,Theoretical Active Warps per SM,warp,32
+ft_sgemm_medium,8192.0,occupancy,Theoretical Occupancy,%,66.67
+ft_sgemm_medium,8192.0,occupancy,Achieved Occupancy,%,66.45
+ft_sgemm_medium,8192.0,occupancy,Achieved Active Warps Per SM,warp,31.90
+ft_sgemm_medium,8192.0,gpu_and_memory_workload,Average L1 Active Cycles,cycle,5341871381.25
+ft_sgemm_medium,8192.0,gpu_and_memory_workload,Total L1 Elapsed Cycles,cycle,42659829120
+ft_sgemm_medium,8192.0,gpu_and_memory_workload,Average L2 Active Cycles,cycle,5502467699.25
+ft_sgemm_medium,8192.0,gpu_and_memory_workload,Total L2 Elapsed Cycles,cycle,22030203560
+ft_sgemm_medium,8192.0,gpu_and_memory_workload,Average SM Active Cycles,cycle,5341871381.25
+ft_sgemm_medium,8192.0,gpu_and_memory_workload,Total SM Elapsed Cycles,cycle,42659829120
+ft_sgemm_medium,8192.0,gpu_and_memory_workload,Average SMSP Active Cycles,cycle,5357909812.03
+ft_sgemm_medium,8192.0,gpu_and_memory_workload,Total SMSP Elapsed Cycles,cycle,170639316480

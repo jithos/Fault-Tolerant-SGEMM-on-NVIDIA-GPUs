@@ -1,0 +1,10 @@
+==PROF== Connected to process 20002 (/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs/build/ft_sgemm)
+Start verification!
+[Kernel Completed Successfully]
+kernel 12 finish verified!
+################## Performance (GFLOPS) ########################
+Matrix Size         |    1024|
+abft_kernel_medium  |       0|
+==PROF== Disconnected from process 20002
+"ID","Process ID","Process Name","Host Name","Kernel Name","Context","Stream","Block Size","Grid Size","Device","CC","Section Name","Metric Name","Metric Unit","Metric Value"
+"0","20002","ft_sgemm","127.0.0.1","ft_sgemm_medium(int, int, int, float *, float *, float *, float, float)","1","7","(64, 1, 1)","(32, 32, 1)","0","8.7","Command line profiler metrics","gpu__compute_memory_throughput.max.pct_of_peak_sustained_elapsed","%","89.12"

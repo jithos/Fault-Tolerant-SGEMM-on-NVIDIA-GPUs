@@ -1,0 +1,74 @@
+[13997] ft_sgemm@127.0.0.1
+  sgemm_huge(int, int, int, float *, float *, float *, float, float) (32, 32, 1)x(256, 1, 1), Context 1, Stream 7, Device 0, CC 8.7
+    Section: GPU Speed Of Light Throughput
+    ----------------------- ----------- -------------
+    Metric Name             Metric Unit  Metric Value
+    ----------------------- ----------- -------------
+    SM Frequency                    Mhz        306.00
+    Elapsed Cycles                cycle    94,214,801
+    Memory Throughput                 %         64.18
+    Duration                         ms        307.89
+    L1/TEX Cache Throughput           %         64.12
+    L2 Cache Throughput               %         26.38
+    SM Active Cycles              cycle 94,181,600.12
+    Compute (SM) Throughput           %         78.94
+    ----------------------- ----------- -------------
+
+    OPT   Compute is more heavily utilized than Memory: Look at the Compute Workload Analysis section to see what the   
+          compute pipelines are spending their time doing. Also, consider whether any computation is redundant and      
+          could be reduced or moved to look-up tables.                                                                  
+
+    Section: Launch Statistics
+    -------------------------------- --------------- ---------------
+    Metric Name                          Metric Unit    Metric Value
+    -------------------------------- --------------- ---------------
+    Block Size                                                   256
+    Function Cache Configuration                     CachePreferNone
+    Grid Size                                                  1,024
+    Registers Per Thread             register/thread             126
+    Shared Memory Configuration Size           Kbyte          102.40
+    Driver Shared Memory Per Block       Kbyte/block            1.02
+    Dynamic Shared Memory Per Block       byte/block               0
+    Static Shared Memory Per Block       Kbyte/block           16.38
+    # SMs                                         SM               8
+    Threads                                   thread         262,144
+    Uses Green Context                                             0
+    Waves Per SM                                                  64
+    -------------------------------- --------------- ---------------
+
+    Section: Occupancy
+    ------------------------------- ----------- ------------
+    Metric Name                     Metric Unit Metric Value
+    ------------------------------- ----------- ------------
+    Block Limit SM                        block           16
+    Block Limit Registers                 block            2
+    Block Limit Shared Mem                block            5
+    Block Limit Warps                     block            6
+    Theoretical Active Warps per SM        warp           16
+    Theoretical Occupancy                     %        33.33
+    Achieved Occupancy                        %        33.23
+    Achieved Active Warps Per SM           warp        15.95
+    ------------------------------- ----------- ------------
+
+    OPT   Est. Local Speedup: 66.67%                                                                                    
+          The 4.00 theoretical warps per scheduler this kernel can issue according to its occupancy are below the       
+          hardware maximum of 12. This kernel's theoretical occupancy (33.3%) is limited by the number of required      
+          registers.                                                                                                    
+
+    Section: GPU and Memory Workload Distribution
+    -------------------------- ----------- -------------
+    Metric Name                Metric Unit  Metric Value
+    -------------------------- ----------- -------------
+    Average L1 Active Cycles         cycle 94,181,600.12
+    Total L1 Elapsed Cycles          cycle   752,797,376
+    Average L2 Active Cycles         cycle    91,662,389
+    Total L2 Elapsed Cycles          cycle   376,859,196
+    Average SM Active Cycles         cycle 94,181,600.12
+    Total SM Elapsed Cycles          cycle   752,797,376
+    Average SMSP Active Cycles       cycle 94,112,717.22
+    Total SMSP Elapsed Cycles        cycle 3,011,189,504
+    -------------------------- ----------- -------------
+
+    WRN   The optional metric dram__cycles_active.avg could not be found. Collecting it as an additional metric could   
+          enable the rule to provide more guidance.                                                                     
+
