@@ -16,8 +16,8 @@
 /* TODO: REMOVE after DEBUGGING */
 #include <thread>
 
-#define RESULTS_FILE "results.csv"
-#define ERROR_INDICES_FILE "error_indices.csv"
+#define RESULTS_FILE "_results.csv"
+#define ERROR_INDICES_FILE "_indices.csv"
 
 // #define DO_CUBLAS_VERIFICATION
 
@@ -61,7 +61,7 @@ void write_header_to_results_file(const char* folder, const char* experiment_nam
     /* ----------------------------- */
 
     // Define the filename for results file
-    std::string results_filename = std::string(folder) + std::string(RESULTS_FILE);
+    std::string results_filename = std::string(folder) + std::string("exp_") + std::string(experiment_name) + std::string(RESULTS_FILE);
 
     // Open the file in output mode to write the header
     std::fstream results_fd(results_filename, std::ios::out | std::ios::binary);
@@ -99,7 +99,7 @@ void write_header_to_indices_file(const char* folder, const char* experiment_nam
     /* ----------------------------- */
 
     // Define the filename for indices file
-    std::string indices_filename = std::string(folder) + std::string(ERROR_INDICES_FILE);
+    std::string indices_filename = std::string(folder) + std::string("exp_") + std::string(experiment_name) + std::string(ERROR_INDICES_FILE);
 
     // Open the file in output mode to write the header
     std::fstream indices_fd(indices_filename, std::ios::out | std::ios::binary);
@@ -142,7 +142,7 @@ void write_results_to_file(
     ) {
     
     // Define the filename for results file
-    std::string filename = std::string(folder) + RESULTS_FILE;
+    std::string filename = std::string(folder) + std::string("exp_") + std::string(experiment_name) + std::string(RESULTS_FILE);
 
     // Open the file in append mode to add results
     std::fstream file(filename, std::ios::out | std::ios::binary | std::ios::app);
@@ -181,11 +181,12 @@ void write_indices_to_file(
         int* error_col_index,
         float* error_diff,
         unsigned int seu_count,
-        int repetition
+        int repetition,
+        const char* experiment_name
     ) {
 
     // Define the filename for indices file
-    std::string filename = std::string(folder) + ERROR_INDICES_FILE;
+    std::string filename = std::string(folder) + std::string("exp_") + std::string(experiment_name) + std::string(ERROR_INDICES_FILE);
 
     // Open the file in append mode to add results
     std::fstream file(filename, std::ios::out | std::ios::binary | std::ios::app);
@@ -340,6 +341,7 @@ int main(int argc, char **argv){
     cudaGetDevice(&deviceId);            
     cudaDeviceProp props = getDetails(deviceId);
 
+    printf("Allocating host memory...\n");
     A = (float *)calloc(MAX_SIZE * MAX_SIZE, sizeof(float));
     B = (float *)calloc(MAX_SIZE * MAX_SIZE, sizeof(float));
     C = (float *)calloc(MAX_SIZE * MAX_SIZE * repeat_kernel, sizeof(float));
@@ -352,6 +354,7 @@ int main(int argc, char **argv){
     // Use the generate matrix utility -> see generate_matrices.cu
 
     // -- Read input matrices from file
+    printf("Reading input matrices from input files...\n");
     read_matrix_from_file(file_A_name, A, MAX_SIZE);
     read_matrix_from_file(file_B_name, B, MAX_SIZE);
     read_matrix_from_file(file_C_name, C_ref, MAX_SIZE);
@@ -360,7 +363,8 @@ int main(int argc, char **argv){
     C_BLAS = (float *)calloc(MAX_SIZE * MAX_SIZE, sizeof(float));
     // memset(C_BLAS, 0.0, sizeof(C_BLAS));
     #endif
-            
+
+    printf("Allocating device memory...\n");
     CUDA_CALLER(cudaMalloc((void**) &dA, sizeof(float) * MAX_SIZE * MAX_SIZE));
     CUDA_CALLER(cudaMalloc((void**) &dB, sizeof(float) * MAX_SIZE * MAX_SIZE));  
     CUDA_CALLER(cudaMalloc((void**) &dC, sizeof(float) * MAX_SIZE * MAX_SIZE * repeat_kernel));
@@ -383,7 +387,8 @@ int main(int argc, char **argv){
     /* Prepare output files */
     /* -------------------- */
 
-    // write_header_to_results_file(output_folder, experiment_name);
+    printf("Writing header to output files...\n");
+    write_header_to_results_file(output_folder, experiment_name);
     write_header_to_indices_file(output_folder, experiment_name);
 
     /* ------------------------------ */
@@ -393,6 +398,7 @@ int main(int argc, char **argv){
     cublasHandle_t handle;                  
     cublasCreate(&handle);                 
     cudaDeviceSynchronize();
+    printf("Intialized CUDA handle.\n");
 
     /* ---------------------------- */
     /* Run sanity check on matrices */
@@ -402,16 +408,19 @@ int main(int argc, char **argv){
     // cublasSgemm(handle, CUBLAS_OP_N,CUBLAS_OP_T, M, N, K,  &alpha, dA, M, dB, N, &beta, dC, M);
 
     // Sanity check with ABFT kernel
+    printf("Starting sanity check kernel...\n");
     dim3 blockDim(64);  
     dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
     cudaDeviceSynchronize();  
     ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC, alpha, beta); // , dcheck_A_col, dcheck_B_row, d_debug_int);
 
     cudaDeviceSynchronize();
+    printf("Copying sanity check results to host memory...\n");
     CUDA_CALLER(cudaMemcpy(C, dC, sizeof(float) * MAX_SIZE * MAX_SIZE * repeat_kernel, cudaMemcpyDeviceToHost));
 
     // Count SEU errors by comparing C with C_ref
     unsigned int seu_count = 0;
+    printf("Calcuating SEU count for sanity check...\n");
     count_seu_errors(C, C_ref, M, N, &seu_count);
 
     // Get SEU error locations (row and column indices)
@@ -428,7 +437,8 @@ int main(int argc, char **argv){
         NULL, // (not applicable here)
         error_diff,
         seu_count,
-        -1 // repetition (not applicable here)
+        -1, // repetition (not applicable here)
+        experiment_name
     );
 
     printf("Sanity check completed. SEUs prior to beam detected: %u\n", seu_count);
@@ -437,34 +447,34 @@ int main(int argc, char **argv){
     /* Wait for trigger signal from beam line */
     /* -------------------------------------- */
 
-    int Init = gpioInitialise();
-    if (Init < 0) {
-        printf("Jetgpio initialisation failed. Error code:  %d\n", Init);
-        exit(1);
-    }
-    int stat = gpioSetMode(trigger_gpio, JET_INPUT); // Set GPIO pin as input
-    if (stat < 0)
-    {
-        printf("Failed to set GPIO pin mode. Error code: %d\n", stat);
-        exit(1);
-    }
-    // Set up interrupt handler for falling edge on the trigger GPIO pin
-    stat = gpioSetISRFunc(trigger_gpio, FALLING_EDGE, 10 /* us */, &trigger_timestamp, &beam_line_trigger_handler);
-    if (stat < 0)
-    {
-        printf("Failed to set GPIO alert function. Error code: %d\n", stat);
-        exit(1);
-    }
-    printf("Waiting for trigger signal from beam line...\n");
-    while (wait_trigger) {
-        // Wait for the GPIO pin to go high
-        if (!enable_trigger_signal)
-        {
-            break; // Continue without waiting for trigger signal if it's disabled
-        }
-    }
     if (enable_trigger_signal)
     {
+        int Init = gpioInitialise();
+        if (Init < 0) {
+            printf("Jetgpio initialisation failed. Error code:  %d\n", Init);
+            exit(1);
+        }
+        int stat = gpioSetMode(trigger_gpio, JET_INPUT); // Set GPIO pin as input
+        if (stat < 0)
+        {
+            printf("Failed to set GPIO pin mode. Error code: %d\n", stat);
+            exit(1);
+        }
+        // Set up interrupt handler for falling edge on the trigger GPIO pin
+        stat = gpioSetISRFunc(trigger_gpio, FALLING_EDGE, 10 /* us */, &trigger_timestamp, &beam_line_trigger_handler);
+        if (stat < 0)
+        {
+            printf("Failed to set GPIO alert function. Error code: %d\n", stat);
+            exit(1);
+        }
+        printf("Waiting for trigger signal from beam line...\n");
+        while (wait_trigger) {
+            // Wait for the GPIO pin to go high
+            if (!enable_trigger_signal)
+            {
+                break; // Continue without waiting for trigger signal if it's disabled
+            }
+        }
         printf("Trigger received!\n");
     }
     else
@@ -633,7 +643,8 @@ int main(int argc, char **argv){
             error_col_idx,
             error_diff,
             seu_count,
-            repetition
+            repetition,
+            experiment_name
         );
 
         // Accumulate SEU counts over all kernel repetitions
