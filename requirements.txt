@@ -3,3 +3,4 @@ mplfig
 matplotlib
 numpy
 pandas
+pexpect
