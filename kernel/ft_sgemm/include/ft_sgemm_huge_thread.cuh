@@ -25,9 +25,9 @@
 
 #define float4_set_zero(t) t.x = 0.; t.y = 0.; t.z = 0.; t.w = 0.; 
 #define comp_and_record(checksum, r, offset) \
-    if(checksum.x > err_bound) r = 0 + offset; \ 
-    if(checksum.y > err_bound) r = 1 + offset; \ 
-    if(checksum.z > err_bound) r = 2 + offset; \ 
+    if(checksum.x > err_bound) r = 0 + offset; \
+    if(checksum.y > err_bound) r = 1 + offset; \
+    if(checksum.z > err_bound) r = 2 + offset; \
     if(checksum.w > err_bound) r = 3 + offset; 
 
 // #define print_float4(a, b, id) if(a.x != a.x || a.y != a.y || a.z != a.z || a.w != a.w || b.x != b.x || b.y != b.y || b.z != b.z || b.w != b.w)printf("%d, %f, %f, %f, %f, %f, %f, %f, %f\n", id,  a.x, a.y, a.z, a.w, b.x, b.y, b.z, b.w);

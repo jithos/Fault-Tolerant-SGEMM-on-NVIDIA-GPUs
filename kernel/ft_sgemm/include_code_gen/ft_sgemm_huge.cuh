@@ -46,7 +46,7 @@ __global__  __launch_bounds__(256) void ft_sgemm_huge(int M, int N, int K, float
     // number of threads to load a column of tile A: 128 floats / 8 floats = 16 threads,
     int load_tile_A_num_threads_one_col = (int)(ms / load_tile_A_num_floats_one_thread);
     // parameter for error injection
-    int tx_injec = 17;
+    // int tx_injec = 17;
     float err_bound1 =9500.0;
     float error_inject = 10000.0;
     
@@ -87,7 +87,7 @@ __global__  __launch_bounds__(256) void ft_sgemm_huge(int M, int N, int K, float
     __syncthreads();
     // numbers of warp along A vector and B vector
     int num_warp_A = int(ms / mw);
-    int num_warp_B = int(ns / nw);
+    // int num_warp_B = int(ns / nw);
     
     // 1D warp id =  tx / 32
     int id_warp = (int)(tx / 32);
@@ -195,7 +195,7 @@ __global__  __launch_bounds__(256) void ft_sgemm_huge(int M, int N, int K, float
     // offset C checksum each thread
     int offset_A_B = (tx < (1 * blockDim.x / 2)) ? (buffer_A_offset + offset_store_checksum * ms * ks): (buffer_B_offset + offset_store_checksum * ns * ks);
     int ws = (tx < (1 * blockDim.x / 2)) ? ms: ns;
-    int ws_ = (tx < (1 * blockDim.x / 2)) ? ns: ms;
+    // int ws_ = (tx < (1 * blockDim.x / 2)) ? ns: ms;
     int ws_1 = 1;
     int ws_2[1];
     offset_A_B +=  (tx & (int)(ws / ws_1 - 1)) * ws_1;

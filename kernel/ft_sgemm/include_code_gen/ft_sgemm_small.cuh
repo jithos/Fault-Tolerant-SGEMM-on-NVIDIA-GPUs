@@ -189,7 +189,7 @@ __global__  __launch_bounds__(64) void ft_sgemm_small(int M, int N, int K, float
     // offset C checksum each thread
     int offset_A_B = (tx < (1 * blockDim.x / 2)) ? (buffer_A_offset + offset_store_checksum * ms * ks): (buffer_B_offset + offset_store_checksum * ns * ks);
     int ws = (tx < (1 * blockDim.x / 2)) ? ms: ns;
-    int ws_ = (tx < (1 * blockDim.x / 2)) ? ns: ms;
+    // int ws_ = (tx < (1 * blockDim.x / 2)) ? ns: ms;
     int ws_1 = 1;
     int ws_2[1];
     offset_A_B +=  (tx & (int)(ws / ws_1 - 1)) * ws_1;

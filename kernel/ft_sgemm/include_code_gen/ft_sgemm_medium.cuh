@@ -33,8 +33,8 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
     __shared__ float sAB[1024]; 
 
     // J - DEBUGGING START
-    __shared__ float A_col[8]; // [ks=8]
-    __shared__ float B_row[8]; // [ks=8]
+    // __shared__ float A_col[8]; // [ks=8]
+    // __shared__ float B_row[8]; // [ks=8]
     // J - DEBUGGIN END
     
     int buffer_A_offset = 0;
@@ -53,9 +53,9 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
     // number of threads to load a column of tile A: 128 floats / 8 floats = 16 threads,
     int load_tile_A_num_threads_one_col = (int)(ms / load_tile_A_num_floats_one_thread); // J - 32 / 4 = 8 threads per column of tile A -> 8 slices of a column
     // parameter for error injection
-    int tx_injec = 17;
+    // int tx_injec = 17;
     float err_bound1 =9500.0;
-    float error_inject = 10000.0;
+    // float error_inject = 10000.0;
     
     
     // thread tx load 8 floats with rows = [(tx % 16 threads) * 8, (tx % 16 threads) * 8 + 7],
@@ -96,7 +96,7 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
     __syncthreads();
     // numbers of warp along A vector and B vector
     int num_warp_A = int(ms / mw); // J - 32 / 16 = 2 warps along A vector
-    int num_warp_B = int(ns / nw); // J - 32 / 32 = 1 warp along B vector
+    // int num_warp_B = int(ns / nw); // J - 32 / 32 = 1 warp along B vector
     
     // 1D warp id =  tx / 32
     int id_warp = (int)(tx / 32); // J - 0 for threads [0-31], 1 for threads [32-63]
@@ -240,7 +240,7 @@ __global__  __launch_bounds__(64) void ft_sgemm_medium(int M, int N, int K, floa
     // offset C checksum each thread
     int offset_A_B = (tx < (1 * blockDim.x / 2)) ? (buffer_A_offset + offset_store_checksum * ms * ks): (buffer_B_offset + offset_store_checksum * ns * ks); // J - (tx < 32) ? (256) : (768), 256 if for block_level_A_c[0], 768 is for block_level_B_r[0]
     int ws = (tx < (1 * blockDim.x / 2)) ? ms: ns; // J - ws=32
-    int ws_ = (tx < (1 * blockDim.x / 2)) ? ns: ms; // J - ws_=32
+    // int ws_ = (tx < (1 * blockDim.x / 2)) ? ns: ms; // J - ws_=32
     int ws_1 = 1;
     int ws_2[1];
     offset_A_B +=  (tx & (int)(ws / ws_1 - 1)) * ws_1;
