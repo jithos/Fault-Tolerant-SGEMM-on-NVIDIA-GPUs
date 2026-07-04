@@ -293,6 +293,9 @@ void atexit_handler() {
     uint64_t exit_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     time_convert = static_cast<time_t>(exit_time/1e6); // Convert microseconds to seconds
     fprintf(stdout,"\nProgram exit timestamp: %lu [us], %s", exit_time, ctime(&time_convert));
+    fprintf(stdout, "\n--------------------------------------------------------------------------\n");
+
+    exit(0);
 }
 
 // void logger_info(char* message)
@@ -309,6 +312,7 @@ void atexit_handler() {
 // }
 
 int main(int argc, char **argv){
+    fprintf(stdout, "\n--------------------------------------------------------------------------\n");
     // Print start timestamp
     start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     time_convert = static_cast<time_t>(start_time/1e6); // Convert microseconds to seconds
@@ -661,14 +665,12 @@ int main(int argc, char **argv){
     cudaError_t launchErr = cudaGetLastError();
     if (launchErr != cudaSuccess) {
         fprintf(stderr, "[Kernel Launch Error] %s\n", cudaGetErrorString(launchErr));
-        exit(EXIT_FAILURE);
     }
 
     // Check execution error
     cudaError_t syncErr = cudaDeviceSynchronize();
     if (syncErr != cudaSuccess) {
         fprintf(stderr, "[Kernel Execution Error] %s\n", cudaGetErrorString(syncErr));
-        exit(EXIT_FAILURE);
     }
 
     fprintf(stdout,"[Kernel Completed Successfully]\n");
