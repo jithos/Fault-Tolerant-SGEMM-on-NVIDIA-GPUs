@@ -44,6 +44,7 @@ if __name__ == "__main__":
     # Check for command-line arguments
     run_ncu = False
     run_nsys = False
+    print_ncu = False
     
     if len(sys.argv) > 1:
         if sys.argv[1] == "help":
@@ -55,12 +56,12 @@ if __name__ == "__main__":
             sys.exit(1)
         elif sys.argv[1] == "ncu":
             run_ncu = True
-        elif sys.argv[1] == "print-ncu":
-            if len(sys.argv) < 3:
-                print("Error: Please provide the NCU report file path.")
-                sys.exit(1)
-            print_ncu = True
-            ncu_report_file = sys.argv[2]
+        # elif sys.argv[1] == "print_ncu":
+        #     if len(sys.argv) < 2:
+        #         print("Error: Please provide the NCU report file path.")
+        #         sys.exit(1)
+        #     ncu_report_file = sys.argv[2]
+        #     print_ncu = True
         elif sys.argv[1] == "nsys":
             run_nsys = True
         else:
@@ -89,14 +90,32 @@ if __name__ == "__main__":
     elif run_nsys:
         command = ["sudo", "-E", "nsys", "profile", "--stats=true", "--output", f"{NSYS_RESULTS_FOLDER}nsys_exp_{EXPERIMENT_NAME}_{KERNEL_LIST[KERNEL_NUMBER]}", "--force-overwrite", "true"] + command
         print("NSYS profiling enabled")
-    elif print_ncu:
-        command = ["ncu", "-i", ncu_report_file]
-        print("Printing NCU report")
+    # elif print_ncu:
+    #     command = ["ncu", "-i", ncu_report_file]
+    #     print("Printing NCU report")
     else:
         command = ["sudo", "-E"] + command
 
-    # Print the command for debugging purposes
-    print("Executing command:", " ".join(command))
+    # Make sure the build directory is up to date
+    make_command = ["make", "-j"]
+    print("----------------------------------------------------------------")
+    print("Executing command: ", " ".join(make_command))
+    make_process = subprocess.run(make_command, cwd=f"{WORKSPACE_FOLDER}/build")
+    if make_process.returncode != 0:
+        print("Error: Make command failed with return code", make_process.returncode)
+        print("----------------------------------------------------------------")
+        sys.exit(1)
+    print("----------------------------------------------------------------")
+
 
     # Execute the command
-    subprocess.run(command)
+    print("----------------------------------------------------------------")
+    print("Executing command:", " ".join(command))
+    kernel_process = subprocess.run(command)
+    if kernel_process.returncode != 0:
+        print("Error: Kernel execution failed with return code", kernel_process.returncode)
+        print("----------------------------------------------------------------")
+        sys.exit(1)
+    if run_ncu:
+        subprocess.run(["ncu", "-i", f"{NCU_RESULTS_FOLDER}ncu_exp_{EXPERIMENT_NAME}_{KERNEL_LIST[KERNEL_NUMBER]}.ncu-rep"])
+    print("----------------------------------------------------------------")
