@@ -22,6 +22,7 @@
 #define STDOUT_FILE "stdout.txt"
 #define STDERR_FILE "stderr.txt"
 // #define SYNC_BETWEEN_KERNELS
+#define MAX_CONCURRENT_KERNELS 4
 
 // #define DO_CUBLAS_VERIFICATION
 
@@ -537,134 +538,124 @@ int main(int argc, char **argv){
 
     // Setup cuda events for timing kernels
     cudaEvent_t kernel_start[repeat_kernel], kernel_stop[repeat_kernel];
+    cudaStream_t kernel_stream[repeat_kernel];
     for (int i = 0; i < repeat_kernel; i++) {
         cudaEventCreate(&kernel_start[i]);
         cudaEventCreate(&kernel_stop[i]);
+        cudaStreamCreateWithFlags(&kernel_stream[i], cudaStreamNonBlocking);
     }
     kernel_time_ms = (float*)malloc(sizeof(float) * repeat_kernel);
 
     // Run the selected kernel(s) for the specified number of repetitions
-    for (int repetition = 0; repetition < repeat_kernel; repetition++){
-        cudaEventRecord(kernel_start[repetition]);
-        if(kernel_number == 1){                             
-            dim3 blockDim(64);                        
-            dim3 gridDim(CEIL_DIV(M, 16), CEIL_DIV(N, 16));      
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            sgemm_small<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);  
-        }  
-        else if(kernel_number == 2){        
-            dim3 blockDim(64);      
-            dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));     
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            // sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);  
-            sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC, alpha, beta);  
-        }         
-        else if(kernel_number == 3){         
-            dim3 blockDim(64);  
-            dim3 gridDim(CEIL_DIV(M, 64), CEIL_DIV(N, 64)); 
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            sgemm_large<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);  
-        }  
-        else if(kernel_number == 4){ 
-            dim3 blockDim(128);      
-            dim3 gridDim(CEIL_DIV(M, 128), CEIL_DIV(N, 32));
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            sgemm_tall<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);  
-        }                 
-        else if(kernel_number == 5){                                   
-            dim3 blockDim(128);  
-            dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 128)); 
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            sgemm_wide<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);  
-        }                 
-        else if(kernel_number == 6){  
-            dim3 blockDim(256);    
-            dim3 gridDim(CEIL_DIV(M, 128), CEIL_DIV(N, 128));
-            fprintf(stdout,"%d, %d, %d, %d, %d\n", gridDim.x, gridDim.y, M, N, K);
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            sgemm_huge<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);
-        }         
-        else if(kernel_number == 11){
-            dim3 blockDim(64);  
-            dim3 gridDim(CEIL_DIV(M, 16), CEIL_DIV(N, 16));
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            ft_sgemm_small<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);
-        }  
-        else if(kernel_number == 12){
-            dim3 blockDim(64);  
-            dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta); // , dcheck_A_col, dcheck_B_row, d_debug_int);  
-        }      
-        else if(kernel_number == 13){   
-            dim3 blockDim(64);  
-            dim3 gridDim(CEIL_DIV(M, 64), CEIL_DIV(N, 64));
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            ft_sgemm_large<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);  
-        } 
-        else if(kernel_number == 14){
-            dim3 blockDim(128);                           
-            dim3 gridDim(CEIL_DIV(M, 128), CEIL_DIV(N, 32));
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            ft_sgemm_tall<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);  
-        }              
-        else if(kernel_number == 15){
-            dim3 blockDim(128);  
-            dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N,  128));  
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            ft_sgemm_wide<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);  
-        }  
-        else if(kernel_number == 16){
-            dim3 blockDim(256);  
-            dim3 gridDim(CEIL_DIV(M, 128), CEIL_DIV(N, 128));
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            ft_sgemm_huge<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);  
-        }   
-        else if(kernel_number == 17){
-            dim3 blockDim(96);  
-            dim3 gridDim(CEIL_DIV(M, 48), CEIL_DIV(N, 48));
-            #ifdef SYNC_BETWEEN_KERNELS
-            cudaDeviceSynchronize();
-            #endif
-            ft_sgemm_medium_96<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);  
-        }  
-        else{
-            cublasSgemm(handle, CUBLAS_OP_N,CUBLAS_OP_T, M, N, K, &alpha, dA, M, dB, N, &beta, dC+repetition*MAX_SIZE*MAX_SIZE, M);
-            fprintf(stdout,"Invalid kernel number provided. Running cuBLAS sgemm by default.\n");
-        } 
-        cudaEventRecord(kernel_stop[repetition]);
+    // for (int repetition = 0; repetition < repeat_kernel; repetition++){
+    //     cudaEventRecord(kernel_start[repetition], kernel_stream[repetition]);
+    //     if(kernel_number == 11){
+    //         dim3 blockDim(64);  
+    //         dim3 gridDim(CEIL_DIV(M, 16), CEIL_DIV(N, 16));
+    //         #ifdef SYNC_BETWEEN_KERNELS
+    //         cudaDeviceSynchronize();
+    //         #endif
+    //         ft_sgemm_small<<<gridDim, blockDim, 0, kernel_stream[repetition]>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta);
+    //     }  
+    //     else if(kernel_number == 12){
+    //         dim3 blockDim(64);  
+    //         dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
+    //         #ifdef SYNC_BETWEEN_KERNELS
+    //         cudaDeviceSynchronize();
+    //         #endif
+    //         ft_sgemm_medium<<<gridDim, blockDim, 0, kernel_stream[repetition]>>>(M, N, K, dA, dB, dC+repetition*MAX_SIZE*MAX_SIZE, alpha, beta); // , dcheck_A_col, dcheck_B_row, d_debug_int);  
+    //     }
+    //     else
+    //     {
+    //         fprintf(stdout,"Kernel number %d is not implemented. Exiting...\n", kernel_number);
+    //         exit(-1);
+    //     }
+    //     cudaEventRecord(kernel_stop[repetition], kernel_stream[repetition]);
 
-        /* Pause between kernels (used for debugging & current measurements) - START */
-        // cudaDeviceSynchronize();
-        // time_t kernel_timestamp = time(nullptr);
-        // fprintf(stdout,"[%s] Repetition %d finisched.\n", ctime(&kernel_timestamp), repetition);
-        // std::this_thread::sleep_for(std::chrono::seconds(1));
-        /* Pause between kernels (used for debugging & current measurements) - END */
+    //     /* Pause between kernels (used for debugging & current measurements) - START */
+    //     // cudaDeviceSynchronize();
+    //     // time_t kernel_timestamp = time(nullptr);
+    //     // fprintf(stdout,"[%s] Repetition %d finisched.\n", ctime(&kernel_timestamp), repetition);
+    //     // std::this_thread::sleep_for(std::chrono::seconds(1));
+    //     /* Pause between kernels (used for debugging & current measurements) - END */
+    // }
+
+    // CONCURRENT STREAM SCHEDULING - START
+    int completed_streams = 0;
+    bool stream_completed[repeat_kernel] = {false}; // Track completion status of each stream
+    bool stream_running[repeat_kernel] = {false}; // Track running status of each stream
+    int active_streams[MAX_CONCURRENT_KERNELS]; // Track active streams
+    for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
+        active_streams[i] = -1;
     }
+    while (completed_streams < repeat_kernel) {
+        // Check for any CUDA errors
+        if (cudaGetLastError() != cudaSuccess) {
+            fprintf(stderr, "ERROR detected: %s\n", cudaGetErrorString(cudaGetLastError()));
+        }
+
+        // Check which streams have completed
+        for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
+            if (active_streams[i] == -1) continue; // Skip inactive streams
+            if (cudaStreamQuery(kernel_stream[active_streams[i]]) == cudaSuccess) {
+                // cudaStreamSynchronize(kernel_stream[active_streams[i]]);
+                fprintf(stdout,"Repetition %d finished.\n", active_streams[i] + 1);
+                stream_completed[active_streams[i]] = true;
+                // stream_running[active_streams[i]] = false; // Mark this stream as no longer running
+                active_streams[i] = -1; // Mark this stream as inactive
+                completed_streams++;
+            }
+        }
+
+        // Schedule new kernels if there are available streams
+        for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
+            // Find an inactive stream slot
+            if (active_streams[i] == -1) {
+                int new_active_stream = -1;
+
+                // Check which stream needs scheduling
+                for (int j = 0; j < repeat_kernel; j++) {
+                    if (!stream_completed[j] && !stream_running[j]) {
+                        active_streams[i] = j;
+                        new_active_stream = j;
+                        break;
+                    }
+                }
+
+                // Launch the kernel for the new active stream if found
+                if (new_active_stream != -1)
+                {
+                    stream_running[new_active_stream] = true; // Mark this stream as running
+                    cudaEventRecord(kernel_start[new_active_stream], kernel_stream[new_active_stream]);
+                    if(kernel_number == 11){
+                        dim3 blockDim(64);  
+                        dim3 gridDim(CEIL_DIV(M, 16), CEIL_DIV(N, 16));
+                        #ifdef SYNC_BETWEEN_KERNELS
+                        cudaDeviceSynchronize();
+                        #endif
+                        ft_sgemm_small<<<gridDim, blockDim, 0, kernel_stream[new_active_stream]>>>(M, N, K, dA, dB, dC+new_active_stream*MAX_SIZE*MAX_SIZE, alpha, beta);
+                    }  
+                    else if(kernel_number == 12){
+                        dim3 blockDim(64);  
+                        dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
+                        #ifdef SYNC_BETWEEN_KERNELS
+                        cudaDeviceSynchronize();
+                        #endif
+                        ft_sgemm_medium<<<gridDim, blockDim, 0, kernel_stream[new_active_stream]>>>(M, N, K, dA, dB, dC+new_active_stream*MAX_SIZE*MAX_SIZE, alpha, beta); // , dcheck_A_col, dcheck_B_row, d_debug_int);  
+                    }
+                    else
+                    {
+                        fprintf(stdout,"Kernel number %d is not implemented. Exiting...\n", kernel_number);
+                        exit(-1);
+                    }
+                    cudaEventRecord(kernel_stop[new_active_stream], kernel_stream[new_active_stream]);
+                    fprintf(stdout,"Repetition %d started.\n", new_active_stream + 1);
+                }
+            }
+        }
+    }
+    // CONCURRENT STREAM SCHEDULING - END
+
 
     // Check launch error
     cudaError_t launchErr = cudaGetLastError();
@@ -690,9 +681,17 @@ int main(int argc, char **argv){
 
     // Print kernel execution times for each repetition using CUDA events
     cudaEventSynchronize(kernel_stop[repeat_kernel - 1]);
+    // cudaDeviceSynchronize(); // Use this to wait for all kernels to finish before measuring time
     for (int repetition = 0; repetition < repeat_kernel; repetition++) {
         cudaEventElapsedTime(&kernel_time_ms[repetition], kernel_start[repetition], kernel_stop[repetition]);
         fprintf(stdout,"Kernel execution time for repetition %d: %f ms\n", repetition + 1, kernel_time_ms[repetition]);
+    }
+
+    // Clean up CUDA events and streams
+    for (int repetition = 0; repetition < repeat_kernel; repetition++) {
+        cudaEventDestroy(kernel_start[repetition]);
+        cudaEventDestroy(kernel_stop[repetition]);
+        cudaStreamDestroy(kernel_stream[repetition]);
     }
 
     cudaMemcpy(C, dC, sizeof(float) * M * N * repeat_kernel, cudaMemcpyDeviceToHost);
