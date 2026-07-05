@@ -657,7 +657,7 @@ int main(int argc, char **argv){
             // TODO: Mark all active streams as cancelled
 
             // Cleanup and destroy all streams
-            for (int i = 0; i < repeat_kernel; i++) {
+            for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
                 if (active_streams[i] != -1) {
                     fprintf(stdout,"Repetition %d cancelled due to some CUDA error.\n", active_streams[i] + 1);
 
