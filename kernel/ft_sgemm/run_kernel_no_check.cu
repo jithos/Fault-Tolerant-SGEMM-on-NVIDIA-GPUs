@@ -18,7 +18,7 @@
 #include <unistd.h>
 
 #define RESULTS_FILE "results.csv"
-#define ERROR_INDICES_FILE "error_indices.csv"
+#define EVENTS_FILE "events.csv"
 #define STDOUT_FILE "stdout.txt"
 #define STDERR_FILE "stderr.txt"
 // #define SYNC_BETWEEN_KERNELS
@@ -35,7 +35,7 @@ int trigger_gpio = 7;
 
 /* Global variables */
 time_t time_convert;
-uint64_t start_time, end_time, kernel_exec_start_time, kernel_exec_end_time;
+uint64_t app_start_time, app_end_time, kernel_launch_start_time, kernel_launch_end_time;
 float *A = NULL, *B = NULL, *C_ref = NULL, *C_BLAS = NULL, *C = NULL;
 float *check_C_col = NULL, *check_C_row = NULL;
 float *dA = NULL,*dB = NULL, *dC_ref = NULL, *dC_BLAS = NULL, *dC = NULL;
@@ -63,14 +63,15 @@ void read_matrix_from_file(const char* filename, float* matrix, int matrix_size)
     fprintf(stdout,"Read matrix from %s\n", filename);
 }
 
-void write_header_to_results_file(const char* folder){
+void write_header_to_results_file(const char* folder, uint64_t app_start_time){
 
     /* ----------------------------- */
     /* Write header for results file */
     /* ----------------------------- */
 
     // Define the filename for results file
-    std::string results_filename = std::string(folder) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(RESULTS_FILE);
+    time_convert = static_cast<time_t>(app_start_time/1e6); // Convert microseconds to seconds
+    std::string results_filename = std::string(folder) + std::string(ctime(&time_convert)) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(RESULTS_FILE);
 
     // Open the file in output mode to write the header
     std::fstream results_fd(results_filename, std::ios::out | std::ios::binary);
@@ -87,10 +88,10 @@ void write_header_to_results_file(const char* folder){
         << "file_A" << ","
         << "file_B" << ","
         << "file_C" << ","
-        << "start_time" << ","
-        << "end_time" << ","
-        << "kernel_exec_start_time" << ","
-        << "kernel_exec_end_time" << ","
+        << "app_start_time" << ","
+        << "app_end_time" << ","
+        // << "kernel_launch_start_time" << ","
+        // << "kernel_launch_end_time" << ","
         << "trigger_timestamp" << ","
         << "trigger_signal_enabled" << ","
         << "seu_count_total" << ","
@@ -103,38 +104,39 @@ void write_header_to_results_file(const char* folder){
     fprintf(stdout,"Wrote header to %s\n", results_filename.c_str());
 }
 
-void write_header_to_indices_file(const char* folder) {
+void write_header_to_events_file(const char* folder, uint64_t app_start_time) {
     
     /* ----------------------------- */
-    /* Write header for indices file */
+    /* Write header for events file */
     /* ----------------------------- */
 
-    // Define the filename for indices file
-    std::string indices_filename = std::string(folder) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(ERROR_INDICES_FILE);
+    // Define the filename for events file
+    time_convert = static_cast<time_t>(app_start_time/1e6); // Convert microseconds to seconds
+    std::string events_filename = std::string(folder) + std::string(ctime(&time_convert)) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(EVENTS_FILE);
 
     // Open the file in output mode to write the header
-    std::fstream indices_fd(indices_filename, std::ios::out | std::ios::binary);
-    if (!indices_fd.is_open()) {
-        fprintf(stderr, "Error opening file for writing: %s\n", indices_filename.c_str());
-        indices_fd.close();
+    std::fstream events_fd(events_filename, std::ios::out | std::ios::binary);
+    if (!events_fd.is_open()) {
+        fprintf(stderr, "Error opening file for writing: %s\n", events_filename.c_str());
+        events_fd.close();
         exit(EXIT_FAILURE);
     }
     
-    // Write header for indices file
-    std::stringstream indices_header;
-    indices_header << "sanity_error_row_index" << ","
+    // Write header for events file
+    std::stringstream events_header;
+    events_header << "sanity_error_row_index" << ","
         << "sanity_error_col_index" << ","
         << "error_row_index" << ","
         << "error_col_index" << ","
         << "error_value" << ","
         << "seu_count" << ","
         << "repetition" << "\n";
-    // fprintf(stdout,indices_header.str().c_str());
-    indices_fd << indices_header.str();
+    // fprintf(stdout,events_header.str().c_str());
+    events_fd << events_header.str();
 
     // Close the file after writing
-    indices_fd.close();
-    fprintf(stdout,"Wrote header to %s\n", indices_filename.c_str());
+    events_fd.close();
+    fprintf(stdout,"Wrote header to %s\n", events_filename.c_str());
 }
 
 void write_results_to_file(
@@ -143,10 +145,10 @@ void write_results_to_file(
         char* file_A,
         char* file_B,
         char* file_C,
-        uint64_t start_time,
-        uint64_t end_time,
-        uint64_t kernel_exec_start_time,
-        uint64_t kernel_exec_end_time,
+        uint64_t app_start_time,
+        uint64_t app_end_time,
+        // uint64_t kernel_launch_start_time,
+        // uint64_t kernel_launch_end_time,
         unsigned long trigger_timestamp,
         bool trigger_signal_enabled,
         unsigned int seu_count_total,
@@ -154,7 +156,8 @@ void write_results_to_file(
     ) {
     
     // Define the filename for results file
-    std::string filename = std::string(folder) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(RESULTS_FILE);
+    time_convert = static_cast<time_t>(app_start_time/1e6); // Convert microseconds to seconds
+    std::string filename = std::string(folder) + std::string(ctime(&time_convert)) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(RESULTS_FILE);
 
     // Open the file in append mode to add results
     std::fstream file(filename, std::ios::out | std::ios::binary | std::ios::app);
@@ -171,10 +174,10 @@ void write_results_to_file(
         << file_A << ","
         << file_B << ","
         << file_C << ","
-        << start_time << ","
-        << end_time << ","
-        << kernel_exec_start_time << ","
-        << kernel_exec_end_time << ","
+        << app_start_time << ","
+        << app_end_time << ","
+        // << kernel_launch_start_time << ","
+        // << kernel_launch_end_time << ","
         << trigger_timestamp << ","
         << trigger_signal_enabled << ","
         << seu_count_total << ","
@@ -187,8 +190,9 @@ void write_results_to_file(
     fprintf(stdout,"Saved results to %s\n", filename.c_str());
 }
 
-void write_indices_to_file(
+void write_events_to_file(
         const char* folder,
+        uint64_t app_start_time,
         int* sanity_error_row_index,
         int* sanity_error_col_index,
         int* error_row_index,
@@ -198,8 +202,9 @@ void write_indices_to_file(
         int repetition
     ) {
 
-    // Define the filename for indices file
-    std::string filename = std::string(folder) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(ERROR_INDICES_FILE);
+    // Define the filename for events file
+    time_convert = static_cast<time_t>(app_start_time/1e6); // Convert microseconds to seconds
+    std::string filename = std::string(folder) + std::string(ctime(&time_convert)) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(EVENTS_FILE);
 
     // Open the file in append mode to add results
     std::fstream file(filename, std::ios::out | std::ios::binary | std::ios::app);
@@ -314,9 +319,9 @@ void atexit_handler() {
 int main(int argc, char **argv){
     fprintf(stdout, "\n--------------------------------------------------------------------------\n");
     // Print start timestamp
-    start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    time_convert = static_cast<time_t>(start_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"Program start timestamp: %lu [us], %s", start_time, ctime(&time_convert));
+    app_start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    time_convert = static_cast<time_t>(app_start_time/1e6); // Convert microseconds to seconds
+    fprintf(stdout,"Program start timestamp: %lu [us], %s", app_start_time, ctime(&time_convert));
 
     // Register atexit handler to ensure it gets called on normal exit
     const int result = std::atexit(atexit_handler); // Handler will be called
@@ -423,8 +428,8 @@ int main(int argc, char **argv){
     /* -------------------- */
 
     printf("Writing header to output files...\n");
-    write_header_to_results_file(output_folder);
-    write_header_to_indices_file(output_folder);
+    write_header_to_results_file(output_folder, app_start_time);
+    write_header_to_events_file(output_folder, app_start_time);
 
     /* ------------------------------ */
     /* Preapre cuda handle for CUBLAS */
@@ -476,8 +481,9 @@ int main(int argc, char **argv){
     float error_value[seu_count];
     get_seu_indices(C, C_ref, M, N, error_row_idx, error_col_idx, error_value);
 
-    write_indices_to_file(
+    write_events_to_file(
         output_folder,
+        app_start_time,
         error_row_idx,
         error_col_idx,
         NULL, // (not applicable here)
@@ -527,9 +533,9 @@ int main(int argc, char **argv){
     fprintf(stdout,"Starting kernel execution...\n");
     fprintf(stdout,"Matrix size: %d, Kernel number: %d, Repetitions: %d\n", MAX_SIZE, kernel_number, repeat_kernel);
     // Print kernel start timestamp
-    kernel_exec_start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    time_convert = static_cast<time_t>(kernel_exec_start_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"Kernel start timestamp: %lu [us], %s", kernel_exec_start_time, ctime(&time_convert));
+    kernel_launch_start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    time_convert = static_cast<time_t>(kernel_launch_start_time/1e6); // Convert microseconds to seconds
+    fprintf(stdout,"Kernel launch start timestamp: %lu [us], %s", kernel_launch_start_time, ctime(&time_convert));
 
     /* -------------------- */
     /* Run selected kernels */
@@ -676,10 +682,10 @@ int main(int argc, char **argv){
     fprintf(stdout,"[Kernel Completed Successfully]\n");
     
     // Print start timestamp
-    kernel_exec_end_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    time_convert = static_cast<time_t>(kernel_exec_end_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"\nKernel execution end timestamp: %lu [us], %s", kernel_exec_end_time, ctime(&time_convert));
-    fprintf(stdout,"Kernel execution duration: %lu [us]\n", kernel_exec_end_time - kernel_exec_start_time);
+    kernel_launch_end_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    time_convert = static_cast<time_t>(kernel_launch_end_time/1e6); // Convert microseconds to seconds
+    fprintf(stdout,"\nKernel launch end timestamp: %lu [us], %s", kernel_launch_end_time, ctime(&time_convert));
+    fprintf(stdout,"Kernel launch duration: %lu [us]\n", kernel_launch_end_time - kernel_launch_start_time);
 
     // Print kernel execution times for each repetition using CUDA events
     cudaEventSynchronize(kernel_stop[repeat_kernel - 1]);
@@ -728,8 +734,9 @@ int main(int argc, char **argv){
         float error_value[seu_count];
         get_seu_indices(C + repetition * M * N, C_ref, M, N, error_row_idx, error_col_idx, error_value);
 
-        write_indices_to_file(
+        write_events_to_file(
             output_folder,
+            app_start_time,
             NULL, // sanity_error_row_index (not applicable here)
             NULL, // sanity_error_col_index (not applicable here)
             error_row_idx,
@@ -745,10 +752,10 @@ int main(int argc, char **argv){
 
     fprintf(stdout,"Total SEU errors across all repetitions: %d\n", seu_count_total);
 
-    end_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    time_convert = static_cast<time_t>(end_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"\nProgram end timestamp: %lu [us], %s", end_time, ctime(&time_convert));
-    fprintf(stdout,"Program duration: %lu [us]\n", end_time - start_time);
+    app_end_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    time_convert = static_cast<time_t>(app_end_time/1e6); // Convert microseconds to seconds
+    fprintf(stdout,"\nProgram end timestamp: %lu [us], %s", app_end_time, ctime(&time_convert));
+    fprintf(stdout,"Program duration: %lu [us]\n", app_end_time - app_start_time);
 
     write_results_to_file(
         output_folder,
@@ -756,10 +763,10 @@ int main(int argc, char **argv){
         file_A_name,
         file_B_name,
         file_C_name,
-        start_time,
-        end_time,
-        kernel_exec_start_time,
-        kernel_exec_end_time,
+        app_start_time,
+        app_end_time,
+        // kernel_launch_start_time,
+        // kernel_launch_end_time,
         trigger_timestamp,
         enable_trigger_signal,
         seu_count_total,
