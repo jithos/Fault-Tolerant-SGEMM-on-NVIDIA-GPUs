@@ -649,7 +649,17 @@ int main(int argc, char **argv){
         /* ------------------------- */
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
-            fprintf(stderr, "ERROR detected: %s\n", cudaGetErrorString(err));
+            fprintf(stdout, "ERROR detected: (%s) %s\n", cudaGetErrorName(err), cudaGetErrorString(err));
+
+            // Report which streams were active at the time of the error
+            fprintf(stdout, "Current active streams: ");
+            for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
+                if (active_streams[i] != -1) {
+                    fprintf(stdout,"%d,", active_streams[i] + 1);
+                }
+            }
+            fprintf(stdout, "\n");
+
             // Save error to events file
             // TODO
 
@@ -674,8 +684,18 @@ int main(int argc, char **argv){
                 }
             }
 
-            // Reset the device to recover from the error
-            cudaDeviceReset();
+            // Exit application for unrecoverable CUDA errors
+            if (err == cudaErrorIllegalAddress)
+            {
+                fprintf(stdout,"NOTE: An illegal memory access is an unrecoverable error.\n");
+
+                // Reset the device to recover from the error
+                cudaDeviceReset();
+                fprintf(stdout,"CUDA device was reset. Exiting application.\n");
+
+                // Exit application
+                exit(-1);
+            }
         }
 
         /* ---------------------------------- */
