@@ -51,6 +51,10 @@ char file_C_name[256];
 float sanity_time_ms = 0.0f;
 float* kernel_time_ms = NULL;
 
+/* ------------------------ */
+/* File Operation Functions */
+/* ------------------------ */
+
 void read_matrix_from_file(const char* filename, float* matrix, int matrix_size) {
     std::fstream file(filename, std::ios::in | std::ios::binary);
     if (!file.is_open()) {
@@ -265,12 +269,20 @@ void get_seu_indices(float* C, float* C_ref, int M, int N, int* error_row_idx, i
     }
 }
 
+/* --------------------------- */
+/* Beam Line Trigger Functions */
+/* --------------------------- */
+
 // /* Function to handle GPIO interrupt */
 void beam_line_trigger_handler() {
     time_t time = static_cast<time_t>(trigger_timestamp/1e9); // Convert nanoseconds to seconds
     fprintf(stdout,"Trigger signal timestamp: %lu [us], %s\n", (unsigned long)(trigger_timestamp/1e3), ctime(&time));
     wait_trigger = 0;
 }
+
+/* ---------------------- */
+/* Exit Handler Functions */
+/* ---------------------- */
 
 // // Signal handler for Ctrl+C
 // void signal_handler(int signum) {
@@ -303,6 +315,10 @@ void atexit_handler() {
     exit(0);
 }
 
+/* ---------------- */
+/* Logger Functions */
+/* ---------------- */
+
 // void logger_info(char* message)
 // {
 //     // Redirect stdout and stderr to files
@@ -315,6 +331,10 @@ void atexit_handler() {
 //     fprintf(stderr,"%s", message);
 //     fprintf(STDERR_FILE, "%s", message);
 // }
+
+/* ------------- */
+/* Main Function */
+/* ------------- */
 
 int main(int argc, char **argv){
     fprintf(stdout, "\n--------------------------------------------------------------------------\n");
@@ -591,6 +611,10 @@ int main(int argc, char **argv){
     // }
 
     // CONCURRENT STREAM SCHEDULING - START
+
+    /* --------------------------------------- */
+    /* Concurrent streaming scheduling - SETUP */
+    /* --------------------------------------- */
     int completed_streams = 0;
     bool stream_completed[repeat_kernel] = {false}; // Track completion status of each stream
     bool stream_running[repeat_kernel] = {false}; // Track running status of each stream
@@ -598,13 +622,19 @@ int main(int argc, char **argv){
     for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
         active_streams[i] = -1;
     }
+
+    /* -------------------------------------- */
+    /* Concurrent streaming scheduling - LOOP */
+    /* -------------------------------------- */
     while (completed_streams < repeat_kernel) {
         // Check for any CUDA errors
         if (cudaGetLastError() != cudaSuccess) {
             fprintf(stderr, "ERROR detected: %s\n", cudaGetErrorString(cudaGetLastError()));
         }
 
-        // Check which streams have completed
+        /* ---------------------------------- */
+        /* Check which streams have completed */
+        /* ---------------------------------- */
         for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
             if (active_streams[i] == -1) continue; // Skip inactive streams
             if (cudaStreamQuery(kernel_stream[active_streams[i]]) == cudaSuccess) {
@@ -617,7 +647,9 @@ int main(int argc, char **argv){
             }
         }
 
-        // Schedule new kernels if there are available streams
+        /* --------------------------------------------- */
+        /* Schedule new kernels for any inactive streams */
+        /* --------------------------------------------- */
         for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
             // Find an inactive stream slot
             if (active_streams[i] == -1) {
