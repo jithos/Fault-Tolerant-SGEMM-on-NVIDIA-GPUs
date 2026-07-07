@@ -27,6 +27,7 @@
 #define MAX_CONCURRENT_KERNELS 2
 
 // #define DO_CUBLAS_VERIFICATION
+// #define ENABLE_SEU_DATA_LOGGING
 
 // /* Global variable to interrupt the loop later on */
 static volatile int wait_trigger = 1;
@@ -47,7 +48,9 @@ float *dcheck_C_col = NULL, *dcheck_C_row = NULL;
 const char* folder_name;
 const char* output_folder;
 const char* experiment_name;
-bool enable_sanity_check;
+bool enable_trigger_signal = false;
+bool enable_sanity_check = false;
+bool enable_seu_data_logging = false;
 char file_A_name[256];
 char file_B_name[256];
 char file_C_name[256];
@@ -55,6 +58,14 @@ std::string file_timestamp;
 std::string results_file_path;
 std::string events_file_path;
 std::string seu_data_file_path;
+std::fstream *results_file = NULL;
+std::fstream *events_file = NULL;
+std::fstream *seu_data_file = NULL;
+int matrix_size = 99;
+int seu_count = 0;
+int seu_count_total = 0;
+int kernel_number = 12; // 12 is used as default kernel number
+int repeat_kernel = 1; // Default of repetitions for the kernel execution
 
 /* Global variables for CUDA events */
 float sanity_time_ms = 0.0f;
@@ -76,19 +87,11 @@ void read_matrix_from_file(const char* filename, float* matrix, int matrix_size)
     fprintf(stdout,"Read matrix from %s\n", filename);
 }
 
-void write_header_to_results_file(const std::string& file_path) {
+void write_header_to_results_file(std::fstream *file) {
 
     /* ----------------------------- */
     /* Write header for results file */
     /* ----------------------------- */
-
-    // Open the file in output mode to write the header
-    std::fstream results_fd(file_path, std::ios::out | std::ios::binary);
-    if (!results_fd.is_open()) {
-        fprintf(stderr, "Error opening file for writing: %s\n", file_path.c_str());
-        results_fd.close();
-        exit(EXIT_FAILURE);
-    }
     
     // Write header for results file
     std::stringstream results_header;
@@ -101,32 +104,23 @@ void write_header_to_results_file(const std::string& file_path) {
         << "app_end_time" << ","
         // << "kernel_launch_start_time" << ","
         // << "kernel_launch_end_time" << ","
-        << "trigger_timestamp" << ","
         << "trigger_signal_enabled" << ","
+        << "seu_data_logging_enabled" << ","
+        << "sanity_check_enabled" << ","
         << "seu_count_total" << ","
-        << "kernel_number" << "\n";
+        << "kernel_number" << ","
+        << "repeat_kernel" << "\n";
     // fprintf(stdout,results_header.str().c_str());
-    results_fd << results_header.str();
-
-    // Close the file after writing
-    results_fd.close();
-    fprintf(stdout,"Wrote header to %s\n", file_path.c_str());
+    (*file) << results_header.str();
+    (*file).flush(); // Ensure everything is written to the file immediately
 }
 
-void write_header_to_events_file(const std::string& file_path) {
+void write_header_to_events_file(std::fstream *file) {
     
     /* ----------------------------- */
     /* Write header for events file */
     /* ----------------------------- */
 
-    // Open the file in output mode to write the header
-    std::fstream events_fd(file_path, std::ios::out | std::ios::binary);
-    if (!events_fd.is_open()) {
-        fprintf(stderr, "Error opening file for writing: %s\n", file_path.c_str());
-        events_fd.close();
-        exit(EXIT_FAILURE);
-    }
-    
     // Write header for events file
     std::stringstream events_header;
     events_header
@@ -136,17 +130,17 @@ void write_header_to_events_file(const std::string& file_path) {
         << "kernel_start_timestamp" << ","
         << "kernel_end_timestamp" << ","
         << "trigger_rise_timestamp" << ","
-        << "trigger_fall_timestamp" << "\n";
+        << "trigger_fall_timestamp" << ","
+        << "arduino_timestamp" << ","
+        << "app_start_timestamp" << ","
+        << "app_end_timestamp" << "\n";
     // fprintf(stdout,events_header.str().c_str());
-    events_fd << events_header.str();
-
-    // Close the file after writing
-    events_fd.close();
-    fprintf(stdout,"Wrote header to %s\n", file_path.c_str());
+    (*file) << events_header.str();
+    (*file).flush(); // Ensure everything is written to the file immediately
 }
 
 void write_results_to_file(
-        const std::string& file_path,
+        std::fstream *file,
         int matrix_size,
         char* file_A,
         char* file_B,
@@ -155,19 +149,13 @@ void write_results_to_file(
         uint64_t app_end_time,
         // uint64_t kernel_launch_start_time,
         // uint64_t kernel_launch_end_time,
-        unsigned long trigger_timestamp,
         bool trigger_signal_enabled,
+        bool seu_data_logging_enabled,
+        bool sanity_check_enabled,
         unsigned int seu_count_total,
-        int kernel_number
+        int kernel_number,
+        int repeat_kernel
     ) {
-
-    // Open the file in append mode to add results
-    std::fstream file(file_path, std::ios::out | std::ios::binary | std::ios::app);
-    if (!file.is_open()) {
-        fprintf(stderr, "Error opening file for writing: %s\n", file_path.c_str());
-        file.close();
-        exit(EXIT_FAILURE);
-    }
 
     // Write the results as a new line in the CSV file
     std::stringstream result_line;
@@ -180,36 +168,30 @@ void write_results_to_file(
         << app_end_time << ","
         // << kernel_launch_start_time << ","
         // << kernel_launch_end_time << ","
-        << trigger_timestamp << ","
         << trigger_signal_enabled << ","
+        << seu_data_logging_enabled << ","
+        << sanity_check_enabled << ","
         << seu_count_total << ","
-        << kernel_number << "\n";
+        << kernel_number << ","
+        << repeat_kernel << "\n";
 
-    file << result_line.str();
-
-    // Close the file after writing
-    file.close();
-    fprintf(stdout,"Saved results to %s\n", file_path.c_str());
+    (*file) << result_line.str();
+    // (*file).flush(); // Ensure everything is written to the file immediately
 }
 
 void write_events_to_file(
-        const std::string& file_path,
+        std::fstream *file,
         int repetition, // kernel info
         unsigned int seu_count, // kernel info
         uint64_t kernel_duration, // kernel info
         uint64_t kernel_start_timestamp, // kernel info
         uint64_t kernel_end_timestamp, // kernel info
         unsigned long trigger_rise_timestamp, // trigger info
-        unsigned long trigger_fall_timestamp // trigger info
+        unsigned long trigger_fall_timestamp, // trigger info
+        unsigned long arduino_timestamp, // arduino info
+        uint64_t app_start_timestamp, // app info
+        uint64_t app_end_timestamp // app info
     ) {
-
-    // Open the file in append mode to add results
-    std::fstream file(file_path, std::ios::out | std::ios::binary | std::ios::app);
-    if (!file.is_open()) {
-        fprintf(stderr, "Error opening file for writing: %s\n", file_path.c_str());
-        file.close();
-        exit(EXIT_FAILURE);
-    }
 
     // Write the events to csv file
     std::stringstream result_line;
@@ -220,15 +202,16 @@ void write_events_to_file(
         << kernel_start_timestamp << ","
         << kernel_end_timestamp << ","
         << trigger_rise_timestamp << ","
-        << trigger_fall_timestamp << "\n";
-    file << result_line.str();
-
-    // Close the file after writing
-    file.close();
+        << trigger_fall_timestamp << ","
+        << arduino_timestamp << ","
+        << app_start_timestamp << ","
+        << app_end_timestamp << "\n";
+    (*file) << result_line.str();
+    // (*file).flush(); // Ensure everything is written to the file immediately
 }
 
 void write_seu_data_to_file(
-    const std::string& file_path,
+    std::fstream *file,
     int repetition,
     int seu_count,
     int* error_col_index,
@@ -237,28 +220,18 @@ void write_seu_data_to_file(
 )
 {
 
-    // Open the file in append mode to add results
-    std::fstream file(file_path, std::ios::out | std::ios::binary | std::ios::app);
-    if (!file.is_open()) {
-        fprintf(stderr, "Error opening file for writing: %s\n", file_path.c_str());
-        file.close();
-        exit(EXIT_FAILURE);
-    }
-
     // Write the error indices and values
-    file.write(reinterpret_cast<const char*>(&repetition), sizeof(int));
-    file.write(",", sizeof(char)); // Separator
-    file.write(reinterpret_cast<const char*>(&seu_count), sizeof(unsigned int));
-    file.write(",", sizeof(char)); // Separator
+    (*file).write(reinterpret_cast<const char*>(&repetition), sizeof(int));
+    (*file).write(",", sizeof(char)); // Separator
+    (*file).write(reinterpret_cast<const char*>(&seu_count), sizeof(unsigned int));
+    (*file).write(",", sizeof(char)); // Separator
     if (seu_count > 0)
     {
-        file.write(reinterpret_cast<const char*>(error_col_index), sizeof(int) * seu_count);
-        file.write(reinterpret_cast<const char*>(error_row_index), sizeof(int) * seu_count);
-        file.write(reinterpret_cast<const char*>(error_value), sizeof(float) * seu_count);
+        (*file).write(reinterpret_cast<const char*>(error_col_index), sizeof(int) * seu_count);
+        (*file).write(reinterpret_cast<const char*>(error_row_index), sizeof(int) * seu_count);
+        (*file).write(reinterpret_cast<const char*>(error_value), sizeof(float) * seu_count);
     }
-
-    // Close the file after writing
-    file.close();
+    // (*file).flush(); // Ensure everything is written to the file immediately
 }
 
 /* ------------------- */
@@ -281,10 +254,12 @@ void count_seu_errors(float* C, float* C_ref, int M, int N, int* seu_count, int*
     for (int i = 0; i < M * N; i++) {
         // if (C[i] - C_ref[i] > 1e-2 || C_ref[i] - C[i] > 1e-2) { // Use a tolerance for floating-point comparison like the authors of the ABFT paper if using cuBLAS generated matrix as reference
         if (C[i] != C_ref[i]) {
+            #ifdef ENABLE_SEU_DATA_LOGGING
             // Save the row and column indices and the value of the error
             error_row_idx[*seu_count] = i % M;
             error_col_idx[*seu_count] = i / M;
             error_value[*seu_count] = C[i];
+            #endif
 
             // Increment the SEU count
             (*seu_count)++;
@@ -341,6 +316,12 @@ void signal_handler(int signum) {
 void atexit_handler() {
     fprintf(stdout,"Cleaning up resources...\n");
 
+    // Timestamp end of application
+    app_end_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    time_convert = static_cast<time_t>(app_end_time/1e6); // Convert microseconds to seconds
+    fprintf(stdout,"\nProgram end timestamp: %lu [us], %s", app_end_time, ctime(&time_convert));
+    fprintf(stdout,"Program duration: %lu [us]\n", app_end_time - app_start_time);
+
     // Free up memories
     free(A);
     free(B);
@@ -350,6 +331,44 @@ void atexit_handler() {
     free(check_C_row);
     #ifdef DO_CUBLAS_VERIFICATION
     free(C_BLAS);
+    #endif
+
+    // Flush and close files
+    if (results_file != NULL){
+        // Write results to results file before exiting
+        write_results_to_file(
+            results_file,
+            matrix_size,
+            file_A_name,
+            file_B_name,
+            file_C_name,
+            app_start_time,
+            app_end_time,
+            // kernel_launch_start_time,
+            // kernel_launch_end_time,
+            enable_trigger_signal,
+            enable_seu_data_logging,
+            enable_sanity_check,
+            seu_count_total,
+            kernel_number,
+            repeat_kernel
+        );
+
+        results_file->flush();
+        results_file->close();
+        fprintf(stdout,"Saved results to %s\n", results_file_path.c_str());
+    }
+    if (events_file != NULL) {
+        events_file->flush();
+        events_file->close();
+        fprintf(stdout,"Saved events to %s\n", events_file_path.c_str());
+    }
+    #ifdef ENABLE_SEU_DATA_LOGGING
+    if (seu_data_file != NULL) {
+        seu_data_file->flush();
+        seu_data_file->close();
+        fprintf(stdout,"Saved SEU data to %s\n", seu_data_file_path.c_str());
+    }
     #endif
 
     // Release pheripherals
@@ -413,6 +432,11 @@ int main(int argc, char **argv){
     fprintf(stdout,"\n----------------------------------------\n\n");
     #endif
 
+    // Check compiler flags
+    #ifdef ENABLE_SEU_DATA_LOGGING
+    enable_seu_data_logging = true;
+    #endif
+
     if (argc < 11 + 1)
     {
         fprintf(stdout,"Expected 11 arguments: Matrix start size, end size, step size, kernel start number, end number, repetitions, enable_trigger_signal, input folder, output folder, experiment number, enable_sanity_check. Some arguments are missing! Exiting...\n");
@@ -424,18 +448,16 @@ int main(int argc, char **argv){
     /* -------------------------- */
 
     // int start_size = atoi(argv[1]);        
-    int end_size =  atoi(argv[2]);
-    int MAX_SIZE = end_size;
+    matrix_size =  atoi(argv[2]);
     // int gap_size =  atoi(argv[3]);        
     // int st_kernel = atoi(argv[4]);  
-    int end_kernel = atoi(argv[5]);     
-    int kernel_number = end_kernel;
-    int repeat_kernel = atoi(argv[6]);
-    bool enable_trigger_signal = atoi(argv[7]);
+    kernel_number = atoi(argv[5]);
+    repeat_kernel = atoi(argv[6]);
+    enable_trigger_signal = atoi(argv[7]);
     folder_name = argv[8];
-    sprintf(file_A_name, "%sA_%d.bin", folder_name, MAX_SIZE);
-    sprintf(file_B_name, "%sB_%d.bin", folder_name, MAX_SIZE);
-    sprintf(file_C_name, "%sC_%d.bin", folder_name, MAX_SIZE);
+    sprintf(file_A_name, "%sA_%d.bin", folder_name, matrix_size);
+    sprintf(file_B_name, "%sB_%d.bin", folder_name, matrix_size);
+    sprintf(file_C_name, "%sC_%d.bin", folder_name, matrix_size);
     output_folder = argv[9];
     experiment_name = argv[10];
     enable_sanity_check = atoi(argv[11]);
@@ -449,6 +471,31 @@ int main(int argc, char **argv){
     events_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(EVENTS_FILE);
     seu_data_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(SEU_DATA_FILE);
 
+    // Open results file for writing
+    results_file = new std::fstream(results_file_path, std::ios::out | std::ios::binary | std::ios::app);
+    if (!results_file->is_open()) {
+        fprintf(stderr, "Error opening results file for writing: %s\n", results_file_path.c_str());
+        results_file->close();
+        exit(EXIT_FAILURE);
+    }
+
+    // Open events file for writing
+    events_file = new std::fstream(events_file_path, std::ios::out | std::ios::binary | std::ios::app);
+    if (!events_file->is_open()) {
+        fprintf(stderr, "Error opening events file for writing: %s\n", events_file_path.c_str());
+        events_file->close();
+        exit(EXIT_FAILURE);
+    }
+
+    // Open SEU data file for writing
+    #ifdef ENABLE_SEU_DATA_LOGGING
+    seu_data_file = new std::fstream(seu_data_file_path, std::ios::out | std::ios::binary | std::ios::app);
+    if (!seu_data_file->is_open()) {
+        fprintf(stderr, "Error opening SEU data file for writing: %s\n", seu_data_file_path.c_str());
+        seu_data_file->close();
+        exit(EXIT_FAILURE);
+    }
+    #endif
 
     if (enable_trigger_signal and getuid() != 0)
     {
@@ -461,30 +508,28 @@ int main(int argc, char **argv){
     float alpha = 1.0;
     float beta = 0.0;       
     int M, N, K;    
-    M = MAX_SIZE; N = MAX_SIZE;  K = MAX_SIZE;              
+    M = matrix_size; N = matrix_size;  K = matrix_size;
     int deviceId;          
     cudaGetDevice(&deviceId);            
     cudaDeviceProp props = getDetails(deviceId);
 
     // SEU count variables
-    int seu_count = 0;
-    int seu_count_total = 0;
-    int error_row_idx[MAX_SIZE * MAX_SIZE];
-    int error_col_idx[MAX_SIZE * MAX_SIZE];
-    float error_value[MAX_SIZE * MAX_SIZE];
+    int error_row_idx[M * N];
+    int error_col_idx[M * N];
+    float error_value[M * N];
 
     printf("Allocating host memory...\n");
-    A = (float *)calloc(MAX_SIZE * MAX_SIZE, sizeof(float));
-    B = (float *)calloc(MAX_SIZE * MAX_SIZE, sizeof(float));
-    // C = (float *)calloc(MAX_SIZE * MAX_SIZE * repeat_kernel, sizeof(float));
-    C_ref = (float *)calloc(MAX_SIZE * MAX_SIZE, sizeof(float));
-    check_C_col = (float *)calloc(MAX_SIZE, sizeof(float));
-    check_C_row = (float *)calloc(MAX_SIZE, sizeof(float));
+    A = (float *)calloc(M * N, sizeof(float));
+    B = (float *)calloc(M * K, sizeof(float));
+    // C = (float *)calloc(M * N * repeat_kernel, sizeof(float));
+    C_ref = (float *)calloc(M * N, sizeof(float));
+    check_C_col = (float *)calloc(N, sizeof(float));
+    check_C_row = (float *)calloc(M, sizeof(float));
 
     // Allocate host memory for output matrices for each repetition
     C = (float **)malloc(sizeof(float *) * MAX_CONCURRENT_KERNELS);
     for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
-        C[i] = (float *)calloc(MAX_SIZE * MAX_SIZE, sizeof(float));
+        C[i] = (float *)calloc(M * N, sizeof(float));
     }
 
     // Initialize arrays with random values (or read from file)
@@ -493,31 +538,37 @@ int main(int argc, char **argv){
 
     // -- Read input matrices from file
     printf("Reading input matrices from input files...\n");
-    read_matrix_from_file(file_A_name, A, MAX_SIZE);
-    read_matrix_from_file(file_B_name, B, MAX_SIZE);
-    read_matrix_from_file(file_C_name, C_ref, MAX_SIZE);
+    read_matrix_from_file(file_A_name, A, matrix_size);
+    read_matrix_from_file(file_B_name, B, matrix_size);
+    read_matrix_from_file(file_C_name, C_ref, matrix_size);
+
+    // Inject many error to reference matrix
+    // for (int i = 0; i < M * N; i++)
+    // {
+    //     C_ref[i] *= 0.1;
+    // }
 
     #ifdef DO_CUBLAS_VERIFICATION
-    C_BLAS = (float *)calloc(MAX_SIZE * MAX_SIZE, sizeof(float));
+    C_BLAS = (float *)calloc(M * N, sizeof(float));
     // memset(C_BLAS, 0.0, sizeof(C_BLAS));
     #endif
 
     printf("Allocating device memory...\n");
-    CUDA_CALLER(cudaMalloc((void**) &dA, sizeof(float) * MAX_SIZE * MAX_SIZE));
-    CUDA_CALLER(cudaMalloc((void**) &dB, sizeof(float) * MAX_SIZE * MAX_SIZE));  
-    // CUDA_CALLER(cudaMalloc((void**) &dC, sizeof(float) * MAX_SIZE * MAX_SIZE * repeat_kernel));
-    CUDA_CALLER(cudaMemcpy(dA, A, sizeof(float) * MAX_SIZE * MAX_SIZE, cudaMemcpyHostToDevice));     
-    CUDA_CALLER(cudaMemcpy(dB, B, sizeof(float) * MAX_SIZE * MAX_SIZE, cudaMemcpyHostToDevice));
+    CUDA_CALLER(cudaMalloc((void**) &dA, sizeof(float) * M * N));
+    CUDA_CALLER(cudaMalloc((void**) &dB, sizeof(float) * M * K));  
+    // CUDA_CALLER(cudaMalloc((void**) &dC, sizeof(float) * M * N * repeat_kernel));
+    CUDA_CALLER(cudaMemcpy(dA, A, sizeof(float) * M * N, cudaMemcpyHostToDevice));     
+    CUDA_CALLER(cudaMemcpy(dB, B, sizeof(float) * M * K, cudaMemcpyHostToDevice));
 
     // Allocate device memory for output matrices for each repetition
     dC = (float**)malloc(sizeof(float*) * MAX_CONCURRENT_KERNELS);
     for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
-        cudaMalloc((void**) &(dC[i]), sizeof(float) * MAX_SIZE * MAX_SIZE);
+        cudaMalloc((void**) &(dC[i]), sizeof(float) * M * N);
     }
 
     #ifdef DO_CUBLAS_VERIFICATION
-    CUDA_CALLER(cudaMalloc((void**) &dC_BLAS, sizeof(float) * MAX_SIZE * MAX_SIZE));
-    CUDA_CALLER(cudaMemcpy(dC_BLAS, C_BLAS, sizeof(float) * MAX_SIZE * MAX_SIZE, cudaMemcpyHostToDevice));
+    CUDA_CALLER(cudaMalloc((void**) &dC_BLAS, sizeof(float) * M * N));
+    CUDA_CALLER(cudaMemcpy(dC_BLAS, C_BLAS, sizeof(float) * M * N, cudaMemcpyHostToDevice));
     #endif
 
     /* -------------------- */
@@ -525,8 +576,8 @@ int main(int argc, char **argv){
     /* -------------------- */
 
     printf("Writing header to output files...\n");
-    write_header_to_results_file(results_file_path);
-    write_header_to_events_file(events_file_path);
+    write_header_to_results_file(results_file);
+    write_header_to_events_file(events_file);
 
     /* ------------------------------ */
     /* Preapre cuda handle for CUBLAS */
@@ -547,8 +598,8 @@ int main(int argc, char **argv){
         // cublasSgemm(handle, CUBLAS_OP_N,CUBLAS_OP_T, M, N, K,  &alpha, dA, M, dB, N, &beta, dC, M);
 
         // Allocate device memory for sanity check results
-        CUDA_CALLER(cudaMalloc((void**) &(dC[0]), sizeof(float) * MAX_SIZE * MAX_SIZE));
-        C[0] = (float*)calloc(MAX_SIZE * MAX_SIZE, sizeof(float));
+        CUDA_CALLER(cudaMalloc((void**) &(dC[0]), sizeof(float) * M * N));
+        C[0] = (float*)calloc(M * N, sizeof(float));
 
         // Timestamp start of kernel with cuda event
         cudaEvent_t sanity_start, sanity_stop;
@@ -575,7 +626,7 @@ int main(int argc, char **argv){
 
         cudaDeviceSynchronize();
         printf("Copying sanity check results to host memory...\n");
-        CUDA_CALLER(cudaMemcpy(C[0], dC[0], sizeof(float) * MAX_SIZE * MAX_SIZE, cudaMemcpyDeviceToHost)); // TODO: make async with stream
+        CUDA_CALLER(cudaMemcpy(C[0], dC[0], sizeof(float) * M * N, cudaMemcpyDeviceToHost)); // TODO: make async with stream
 
         // Inject error
         C[0][7*M + 15] *= 0.1; // Inject an error in the first element of C for testing
@@ -585,24 +636,29 @@ int main(int argc, char **argv){
         count_seu_errors(C[0], C_ref, M, N, &seu_count, error_row_idx, error_col_idx, error_value);
 
         write_events_to_file(
-            events_file_path,
+            events_file,
             -1,
             seu_count,
             (uint64_t)(sanity_time_ms * 1000), // Convert ms to us, CUDA event timing
             sanity_kernel_start_time, // Start timestamp of sanity check kernel, OS timestamp timing
             sanity_kernel_end_time, // End timestamp of sanity check kernel, OS timestamp timing
             0,
-            0
+            0,
+            0,
+            app_start_time,
+            app_end_time
         );
 
+        #ifdef ENABLE_SEU_DATA_LOGGING
         write_seu_data_to_file(
-            seu_data_file_path,
+            seu_data_file,
             -1,
             seu_count,
             error_col_idx,
             error_row_idx,
             error_value
         );
+        #endif
 
         fprintf(stdout,"Sanity check completed. SEUs prior to beam detected: %d\n", seu_count);
     }
@@ -643,7 +699,7 @@ int main(int argc, char **argv){
     }
     
     fprintf(stdout,"Starting kernel execution...\n");
-    fprintf(stdout,"Matrix size: %d, Kernel number: %d, Repetitions: %d\n", MAX_SIZE, kernel_number, repeat_kernel);
+    fprintf(stdout,"Matrix size: %d, Kernel number: %d, Repetitions: %d\n", matrix_size, kernel_number, repeat_kernel);
     // Print kernel start timestamp
     kernel_launch_start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     time_convert = static_cast<time_t>(kernel_launch_start_time/1e6); // Convert microseconds to seconds
@@ -782,25 +838,30 @@ int main(int argc, char **argv){
 
                 // Save events to file for this repetition
                 write_events_to_file(
-                    events_file_path,
+                    events_file,
                     active_streams[i],
                     seu_count,
                     (uint64_t)(kernel_time_ms[active_streams[i]] * 1000), // Convert ms to us, CUDA Event timing
                     kernel_exec_start_time[active_streams[i]], // Start timestamp of this kernel, OS timestamp timing
                     kernel_exec_end_time[active_streams[i]], // End timestamp of this kernel, OS timestamp timing
                     0,
-                    0
+                    0,
+                    0,
+                    app_start_time,
+                    app_end_time
                 );
 
                 // Save seu data to file for this repetition
+                #ifdef ENABLE_SEU_DATA_LOGGING
                 write_seu_data_to_file(
-                    seu_data_file_path,
+                    seu_data_file,
                     active_streams[i],
                     seu_count,
                     error_col_idx,
                     error_row_idx,
                     error_value
                 );
+                #endif
 
                 // Accumulate SEU counts over all kernel repetitions
                 seu_count_total += seu_count;
@@ -860,7 +921,7 @@ int main(int argc, char **argv){
                         #endif
                         // TODO: Remove after DEBUGGING - START
                         int mem_access_error = 0;
-                        // if (new_repetition == 7) mem_access_error = MAX_SIZE * MAX_SIZE * sizeof(float) * repeat_kernel; // Introduce memory access error for the 8th repetition (index 7)
+                        // if (new_repetition == 7) mem_access_error = M * N * sizeof(float) * repeat_kernel; // Introduce memory access error for the 8th repetition (index 7)
                         // TODO: Remove after DEBUGGING - END
                         ft_sgemm_medium<<<gridDim, blockDim, 0, kernel_stream[i]>>>(M, N, K, dA, dB, dC[i]+mem_access_error, alpha, beta); // , dcheck_A_col, dcheck_B_row, d_debug_int);  
                     }
@@ -919,28 +980,6 @@ int main(int argc, char **argv){
 
     // Print total SEU errors across all repetitions
     fprintf(stdout,"Total SEU errors across all repetitions: %d\n", seu_count_total);
-
-    // Timestamp end of application
-    app_end_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    time_convert = static_cast<time_t>(app_end_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"\nProgram end timestamp: %lu [us], %s", app_end_time, ctime(&time_convert));
-    fprintf(stdout,"Program duration: %lu [us]\n", app_end_time - app_start_time);
-
-    write_results_to_file(
-        results_file_path,
-        MAX_SIZE,
-        file_A_name,
-        file_B_name,
-        file_C_name,
-        app_start_time,
-        app_end_time,
-        // kernel_launch_start_time,
-        // kernel_launch_end_time,
-        trigger_timestamp,
-        enable_trigger_signal,
-        seu_count_total,
-        kernel_number
-    );
 
     exit(0); // Exit normally to ensure atexit handler is called
 }

@@ -19,10 +19,12 @@ KERNEL_NUMBER = 12
 KERNEL_REPETITIONS = 1
 KERNEL_ENABLE_TRIGGER = False
 KERNEL_ENABLE_SANITY_CHECK = False
+KERNEL_ENABLE_SEU_DATA_LOGGING = False
 KERNEL_INPUT_FOLDER = EXPERIMENT_INPUT_FOLDER
 KERNEL_OUTPUT_FOLDER = EXPERIMENT_RESULTS_FOLDER
-EXPERIMENT_NAME = "X"
-KERNEL_COMMAND = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs/build/run_kernel_no_check"
+EXPERIMENT_NAME = "Y"
+KERNEL_FOLDER = f"{WORKSPACE_FOLDER}build/"
+KERNEL_COMMAND = "run_kernel_seu_data" if KERNEL_ENABLE_SEU_DATA_LOGGING else "run_kernel_seu_count"
 
 KERNEL_LIST = {
     1: "sgemm_small",
@@ -71,7 +73,7 @@ if __name__ == "__main__":
 
     # Construct the command to run the kernel
     command = [
-        KERNEL_COMMAND,
+        KERNEL_FOLDER + KERNEL_COMMAND,
         str(MATRIX_SIZE),
         str(MATRIX_SIZE),
         str(MATRIX_SIZE),
@@ -82,7 +84,7 @@ if __name__ == "__main__":
         KERNEL_INPUT_FOLDER,
         KERNEL_OUTPUT_FOLDER,
         EXPERIMENT_NAME,
-        str(int(KERNEL_ENABLE_SANITY_CHECK))
+        str(int(KERNEL_ENABLE_SANITY_CHECK)),
     ]
 
     # Add profiling tools if specified
