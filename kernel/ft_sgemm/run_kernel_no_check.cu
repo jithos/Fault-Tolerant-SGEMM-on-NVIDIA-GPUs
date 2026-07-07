@@ -143,6 +143,7 @@ void write_header_to_events_file(std::fstream *file) {
         << "kernel_start_timestamp" << ","
         << "kernel_end_timestamp" << ","
         << "repetition_cancelled" << ","
+        << "cuda_error_code" << ","
         << "error_timestamp" << ","
         << "trigger_rise_timestamp" << ","
         << "trigger_fall_timestamp" << ","
