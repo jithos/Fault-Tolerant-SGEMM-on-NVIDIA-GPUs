@@ -525,6 +525,15 @@ void atexit_handler() {
         fprintf(stdout,"Saved results to %s\n", results_file_path.c_str());
     }
     if (events_file != NULL) {
+        kernel_event_to_file(
+            events_file,
+            APP_EXIT_EVENT_ID,
+            0, // seu_count
+            0, // Convert ms to us, CUDA event timing
+            0, // Start timestamp of sanity check kernel, OS timestamp timing
+            0, // End timestamp of sanity check kernel, OS timestamp timing
+            false // repetition_cancelled
+        );
         events_file->flush();
         events_file->close();
         fprintf(stdout,"Saved events to %s\n", events_file_path.c_str());
@@ -1104,16 +1113,6 @@ int main(int argc, char **argv){
             // Exit application for unrecoverable CUDA errors
             if (err == cudaErrorIllegalAddress || unrecoverable_timeouts_detected == true)
             {
-                // Write app exit to events file
-                uint64_t exit_timestamp;
-                save_timestamp(&exit_timestamp);
-                error_event_to_file(
-                    events_file,
-                    APP_EXIT_EVENT_ID,
-                    -1,
-                    exit_timestamp
-                );
-
                 if (err == cudaErrorIllegalAddress)
                 {
                     fprintf(stdout,"ERROR: An illegal memory access was detected, which is a unrecoverable error.\n");
