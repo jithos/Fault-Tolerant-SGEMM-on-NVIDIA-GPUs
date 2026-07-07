@@ -19,6 +19,7 @@
 
 #define RESULTS_FILE "results.csv"
 #define EVENTS_FILE "events.csv"
+#define SEU_DATA_FILE "seu_data.bin"
 #define STDOUT_FILE "stdout.txt"
 #define STDERR_FILE "stderr.txt"
 // #define SYNC_BETWEEN_KERNELS
@@ -46,6 +47,10 @@ const char* experiment_name;
 char file_A_name[256];
 char file_B_name[256];
 char file_C_name[256];
+std::string file_timestamp;
+std::string results_file_path;
+std::string events_file_path;
+std::string seu_data_file_path;
 
 /* Global variables for CUDA events */
 float sanity_time_ms = 0.0f;
@@ -67,20 +72,16 @@ void read_matrix_from_file(const char* filename, float* matrix, int matrix_size)
     fprintf(stdout,"Read matrix from %s\n", filename);
 }
 
-void write_header_to_results_file(const char* folder, uint64_t app_start_time){
+void write_header_to_results_file(const std::string& file_path) {
 
     /* ----------------------------- */
     /* Write header for results file */
     /* ----------------------------- */
 
-    // Define the filename for results file
-    time_convert = static_cast<time_t>(app_start_time/1e6); // Convert microseconds to seconds
-    std::string results_filename = std::string(folder) + std::string(ctime(&time_convert)) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(RESULTS_FILE);
-
     // Open the file in output mode to write the header
-    std::fstream results_fd(results_filename, std::ios::out | std::ios::binary);
+    std::fstream results_fd(file_path, std::ios::out | std::ios::binary);
     if (!results_fd.is_open()) {
-        fprintf(stderr, "Error opening file for writing: %s\n", results_filename.c_str());
+        fprintf(stderr, "Error opening file for writing: %s\n", file_path.c_str());
         results_fd.close();
         exit(EXIT_FAILURE);
     }
@@ -105,46 +106,43 @@ void write_header_to_results_file(const char* folder, uint64_t app_start_time){
 
     // Close the file after writing
     results_fd.close();
-    fprintf(stdout,"Wrote header to %s\n", results_filename.c_str());
+    fprintf(stdout,"Wrote header to %s\n", file_path.c_str());
 }
 
-void write_header_to_events_file(const char* folder, uint64_t app_start_time) {
+void write_header_to_events_file(const std::string& file_path) {
     
     /* ----------------------------- */
     /* Write header for events file */
     /* ----------------------------- */
 
-    // Define the filename for events file
-    time_convert = static_cast<time_t>(app_start_time/1e6); // Convert microseconds to seconds
-    std::string events_filename = std::string(folder) + std::string(ctime(&time_convert)) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(EVENTS_FILE);
-
     // Open the file in output mode to write the header
-    std::fstream events_fd(events_filename, std::ios::out | std::ios::binary);
+    std::fstream events_fd(file_path, std::ios::out | std::ios::binary);
     if (!events_fd.is_open()) {
-        fprintf(stderr, "Error opening file for writing: %s\n", events_filename.c_str());
+        fprintf(stderr, "Error opening file for writing: %s\n", file_path.c_str());
         events_fd.close();
         exit(EXIT_FAILURE);
     }
     
     // Write header for events file
     std::stringstream events_header;
-    events_header << "sanity_error_row_index" << ","
-        << "sanity_error_col_index" << ","
-        << "error_row_index" << ","
-        << "error_col_index" << ","
-        << "error_value" << ","
+    events_header
+        << "repetition" << ","
         << "seu_count" << ","
-        << "repetition" << "\n";
+        << "kernel_duration" << ","
+        << "kernel_start_timestamp" << ","
+        << "kernel_end_timestamp" << ","
+        << "trigger_rise_timestamp" << ","
+        << "trigger_fall_timestamp" << "\n";
     // fprintf(stdout,events_header.str().c_str());
     events_fd << events_header.str();
 
     // Close the file after writing
     events_fd.close();
-    fprintf(stdout,"Wrote header to %s\n", events_filename.c_str());
+    fprintf(stdout,"Wrote header to %s\n", file_path.c_str());
 }
 
 void write_results_to_file(
-        const char* folder, 
+        const std::string& file_path,
         int matrix_size,
         char* file_A,
         char* file_B,
@@ -158,15 +156,11 @@ void write_results_to_file(
         unsigned int seu_count_total,
         int kernel_number
     ) {
-    
-    // Define the filename for results file
-    time_convert = static_cast<time_t>(app_start_time/1e6); // Convert microseconds to seconds
-    std::string filename = std::string(folder) + std::string(ctime(&time_convert)) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(RESULTS_FILE);
 
     // Open the file in append mode to add results
-    std::fstream file(filename, std::ios::out | std::ios::binary | std::ios::app);
+    std::fstream file(file_path, std::ios::out | std::ios::binary | std::ios::app);
     if (!file.is_open()) {
-        fprintf(stderr, "Error opening file for writing: %s\n", filename.c_str());
+        fprintf(stderr, "Error opening file for writing: %s\n", file_path.c_str());
         file.close();
         exit(EXIT_FAILURE);
     }
@@ -191,50 +185,72 @@ void write_results_to_file(
 
     // Close the file after writing
     file.close();
-    fprintf(stdout,"Saved results to %s\n", filename.c_str());
+    fprintf(stdout,"Saved results to %s\n", file_path.c_str());
 }
 
 void write_events_to_file(
-        const char* folder,
-        uint64_t app_start_time,
-        int* sanity_error_row_index,
-        int* sanity_error_col_index,
-        int* error_row_index,
-        int* error_col_index,
-        float* error_value,
-        unsigned int seu_count,
-        int repetition
+        const std::string& file_path,
+        int repetition, // kernel info
+        unsigned int seu_count, // kernel info
+        uint64_t kernel_duration, // kernel info
+        uint64_t kernel_start_timestamp, // kernel info
+        uint64_t kernel_end_timestamp, // kernel info
+        unsigned long trigger_rise_timestamp, // trigger info
+        unsigned long trigger_fall_timestamp // trigger info
     ) {
 
-    // Define the filename for events file
-    time_convert = static_cast<time_t>(app_start_time/1e6); // Convert microseconds to seconds
-    std::string filename = std::string(folder) + std::string(ctime(&time_convert)) + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(EVENTS_FILE);
-
     // Open the file in append mode to add results
-    std::fstream file(filename, std::ios::out | std::ios::binary | std::ios::app);
+    std::fstream file(file_path, std::ios::out | std::ios::binary | std::ios::app);
     if (!file.is_open()) {
-        fprintf(stderr, "Error opening file for writing: %s\n", filename.c_str());
+        fprintf(stderr, "Error opening file for writing: %s\n", file_path.c_str());
         file.close();
         exit(EXIT_FAILURE);
     }
 
-    // Write the error indices as a new line in the CSV file
-    for (int i = 0; i < seu_count; i++) {
-        // Replace NULL pointers with default placeholder value
-        int sanity_row_idx = sanity_error_row_index != NULL ? sanity_error_row_index[i] : -1;
-        int sanity_col_idx = sanity_error_col_index != NULL ? sanity_error_col_index[i] : -1;
-        int error_row_idx = error_row_index != NULL ? error_row_index[i] : -1;
-        int error_col_idx = error_col_index != NULL ? error_col_index[i] : -1;
+    // Write the events to csv file
+    std::stringstream result_line;
+    result_line
+        << repetition << ","
+        << seu_count << ","
+        << kernel_duration << ","
+        << kernel_start_timestamp << ","
+        << kernel_end_timestamp << ","
+        << trigger_rise_timestamp << ","
+        << trigger_fall_timestamp << "\n";
+    file << result_line.str();
 
-        std::stringstream result_line;
-        result_line << sanity_row_idx << ","
-            << sanity_col_idx << ","
-            << error_row_idx << ","
-            << error_col_idx << ","
-            << seu_count << ","
-            << error_value[i] << ","
-            << repetition << "\n";
-        file << result_line.str();
+    // Close the file after writing
+    file.close();
+}
+
+void write_seu_data_to_file(
+    const std::string& file_path,
+    int repetition,
+    int seu_count,
+    int* error_col_index,
+    int* error_row_index,
+    float* error_value
+)
+{
+
+    // Open the file in append mode to add results
+    std::fstream file(file_path, std::ios::out | std::ios::binary | std::ios::app);
+    if (!file.is_open()) {
+        fprintf(stderr, "Error opening file for writing: %s\n", file_path.c_str());
+        file.close();
+        exit(EXIT_FAILURE);
+    }
+
+    // Write the error indices and values
+    file.write(reinterpret_cast<const char*>(&repetition), sizeof(int));
+    file.write(",", sizeof(char)); // Separator
+    file.write(reinterpret_cast<const char*>(&seu_count), sizeof(unsigned int));
+    file.write(",", sizeof(char)); // Separator
+    if (seu_count > 0)
+    {
+        file.write(reinterpret_cast<const char*>(error_col_index), sizeof(int) * seu_count);
+        file.write(reinterpret_cast<const char*>(error_row_index), sizeof(int) * seu_count);
+        file.write(reinterpret_cast<const char*>(error_value), sizeof(float) * seu_count);
     }
 
     // Close the file after writing
@@ -399,6 +415,16 @@ int main(int argc, char **argv){
     output_folder = argv[9];
     experiment_name = argv[10];
 
+    // Prepare file names and paths
+    std::tm* f_ts = std::localtime(&time_convert);
+    std::ostringstream ss;
+    ss << std::put_time(f_ts, "%Y-%m-%d_%a_%H:%M:%S");
+    file_timestamp = ss.str();
+    results_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(RESULTS_FILE);
+    events_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(EVENTS_FILE);
+    seu_data_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(SEU_DATA_FILE);
+
+
     if (enable_trigger_signal and getuid() != 0)
     {
         fprintf(stdout,"Trigger signal reception is enabled, but the program is not running with root privileges. Please run as root or disable trigger signal reception. Exiting...\n");
@@ -462,8 +488,8 @@ int main(int argc, char **argv){
     /* -------------------- */
 
     printf("Writing header to output files...\n");
-    write_header_to_results_file(output_folder, app_start_time);
-    write_header_to_events_file(output_folder, app_start_time);
+    write_header_to_results_file(results_file_path);
+    write_header_to_events_file(events_file_path);
 
     /* ------------------------------ */
     /* Preapre cuda handle for CUBLAS */
@@ -872,7 +898,7 @@ int main(int argc, char **argv){
     fprintf(stdout,"Program duration: %lu [us]\n", app_end_time - app_start_time);
 
     write_results_to_file(
-        output_folder,
+        results_file_path,
         MAX_SIZE,
         file_A_name,
         file_B_name,
