@@ -31,13 +31,18 @@
 // /* Global variable to interrupt the loop later on */
 static volatile int wait_trigger = 1;
 unsigned long trigger_timestamp;
+unsigned long beam_rising_timestamp;
+unsigned long beam_falling_timestamp;
+unsigned long arduino_timestamp;
 
 // /* Variable for trigger GPIO pin */
-int trigger_gpio = 7;
+int beam_rising_gpio = 7;
+int beam_falling_gpio = 12;
+int arduino_gpio = 13;
 
 /* Global variables */
 time_t time_convert;
-uint64_t app_start_time, app_end_time, kernel_launch_start_time, kernel_launch_end_time;
+uint64_t app_start_timestamp = 0, app_end_timestamp = 0, kernel_launch_start_time = 0, kernel_launch_end_time = 0;
 float *A = NULL, *B = NULL, *C_ref = NULL, *C_BLAS = NULL;
 float **C = NULL;
 float *check_C_col = NULL, *check_C_row = NULL;
@@ -99,8 +104,8 @@ void write_header_to_results_file(std::fstream *file) {
         << "file_A" << ","
         << "file_B" << ","
         << "file_C" << ","
-        << "app_start_time" << ","
-        << "app_end_time" << ","
+        << "app_start_timestamp" << ","
+        << "app_end_timestamp" << ","
         // << "kernel_launch_start_time" << ","
         // << "kernel_launch_end_time" << ","
         << "trigger_signal_enabled" << ","
@@ -128,6 +133,7 @@ void write_header_to_events_file(std::fstream *file) {
         << "kernel_duration" << ","
         << "kernel_start_timestamp" << ","
         << "kernel_end_timestamp" << ","
+        << "error_timestamp" << ","
         << "trigger_rise_timestamp" << ","
         << "trigger_fall_timestamp" << ","
         << "arduino_timestamp" << ","
@@ -144,8 +150,6 @@ void write_results_to_file(
         char* file_A,
         char* file_B,
         char* file_C,
-        uint64_t app_start_time,
-        uint64_t app_end_time,
         // uint64_t kernel_launch_start_time,
         // uint64_t kernel_launch_end_time,
         bool trigger_signal_enabled,
@@ -163,8 +167,8 @@ void write_results_to_file(
         << file_A << ","
         << file_B << ","
         << file_C << ","
-        << app_start_time << ","
-        << app_end_time << ","
+        << app_start_timestamp << "," // global variable for application start timestamp
+        << app_end_timestamp << "," // global variable for application end timestamp
         // << kernel_launch_start_time << ","
         // << kernel_launch_end_time << ","
         << trigger_signal_enabled << ","
@@ -185,11 +189,11 @@ void write_events_to_file(
         uint64_t kernel_duration, // kernel info
         uint64_t kernel_start_timestamp, // kernel info
         uint64_t kernel_end_timestamp, // kernel info
+        int cuda_error_code, // error info
+        uint64_t error_timestamp, // error info
         unsigned long trigger_rise_timestamp, // trigger info
         unsigned long trigger_fall_timestamp, // trigger info
-        unsigned long arduino_timestamp, // arduino info
-        uint64_t app_start_timestamp, // app info
-        uint64_t app_end_timestamp // app info
+        unsigned long arduino_timestamp // arduino info
     ) {
 
     // Write the events to csv file
@@ -200,11 +204,13 @@ void write_events_to_file(
         << kernel_duration << ","
         << kernel_start_timestamp << ","
         << kernel_end_timestamp << ","
+        << cuda_error_code << ","
+        << error_timestamp << ","
         << trigger_rise_timestamp << ","
         << trigger_fall_timestamp << ","
         << arduino_timestamp << ","
-        << app_start_timestamp << ","
-        << app_end_timestamp << "\n";
+        << app_start_timestamp << "," // global variable for application start timestamp
+        << app_end_timestamp << "\n"; // global variable for application end timestamp
     (*file) << result_line.str();
     // (*file).flush(); // Ensure everything is written to the file immediately
 }
@@ -233,11 +239,116 @@ void write_seu_data_to_file(
     // (*file).flush(); // Ensure everything is written to the file immediately
 }
 
+void kernel_event_to_file(
+        std::fstream *file,
+        int repetition, // kernel info
+        unsigned int seu_count, // kernel info
+        uint64_t kernel_duration, // kernel info
+        uint64_t kernel_start_timestamp, // kernel info
+        uint64_t kernel_end_timestamp // kernel info
+)
+{
+    write_events_to_file(
+        file,
+        repetition,
+        seu_count,
+        kernel_duration,
+        kernel_start_timestamp,
+        kernel_end_timestamp,
+        0, // cuda_error_code
+        0, // error_timestamp
+        0, // trigger_rise_timestamp
+        0, // trigger_fall_timestamp
+        0 // arduino_timestamp
+    );
+}
+
+void error_event_to_file(
+                std::fstream *file,
+                int cuda_error_code,
+                uint64_t error_time
+)
+{
+    write_events_to_file(
+        file,
+        -1, // repetition
+        0, // seu_count
+        0, // kernel_duration
+        0, // kernel_start_timestamp
+        0, // kernel_end_timestamp
+        cuda_error_code, // cuda_error_code
+        error_time, // error_timestamp
+        0, // trigger_rise_timestamp
+        0, // trigger_fall_timestamp
+        0 // arduino_timestamp
+    );
+}
+
+void beam_rise_event_to_file(
+        std::fstream *file,
+        unsigned long trigger_rise_timestamp // trigger info
+)
+{
+    write_events_to_file(
+        file,
+        -1, // repetition
+        0, // seu_count
+        0, // kernel_duration
+        0, // kernel_start_timestamp
+        0, // kernel_end_timestamp
+        0, // cuda_error_code
+        0, // error_timestamp
+        trigger_rise_timestamp,
+        0, // trigger_fall_timestamp
+        0 // arduino_timestamp
+    );
+}
+
+void beam_fall_event_to_file(
+        std::fstream *file,
+        unsigned long trigger_fall_timestamp // trigger info
+)
+{
+    write_events_to_file(
+        file,
+        -1, // repetition
+        0, // seu_count
+        0, // kernel_duration
+        0, // kernel_start_timestamp
+        0, // kernel_end_timestamp
+        0, // cuda_error_code
+        0, // error_timestamp
+        0, // trigger_rise_timestamp
+        trigger_fall_timestamp,
+        0 // arduino_timestamp
+    );
+}
+
+void arduino_event_to_file(
+        std::fstream *file,
+        unsigned long arduino_timestamp // arduino info
+)
+{
+    write_events_to_file(
+        file,
+        -1, // repetition
+        0, // seu_count
+        0, // kernel_duration
+        0, // kernel_start_timestamp
+        0, // kernel_end_timestamp
+        0, // cuda_error_code
+        0, // error_timestamp
+        0, // trigger_rise_timestamp
+        0, // trigger_fall_timestamp
+        arduino_timestamp
+    );
+}
+
 /* ------------------- */
 /* Timestamp Functions */
 /* ------------------- */
 
-void timestamp_kernel(void* data)
+void save_timestamp(void* data)
 {
     uint64_t* timestamp = static_cast<uint64_t*>(data);
     *(timestamp) = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
@@ -287,11 +398,41 @@ void get_seu_indices(float* C, float* C_ref, int M, int N, int* error_row_idx, i
 /* Beam Line Trigger Functions */
 /* --------------------------- */
 
-// /* Function to handle GPIO interrupt */
-void beam_line_trigger_handler() {
-    time_t time = static_cast<time_t>(trigger_timestamp/1e9); // Convert nanoseconds to seconds
-    fprintf(stdout,"Trigger signal timestamp: %lu [us], %s\n", (unsigned long)(trigger_timestamp/1e3), ctime(&time));
+/* Function to handle RISING beam line trigger */
+void beam_line_rising_trigger() {
+    time_t time = static_cast<time_t>(beam_rising_timestamp/1e9); // Convert nanoseconds to seconds
+    fprintf(stdout,"Beam RISING signal timestamp: %lu [us], %s\n", (unsigned long)(beam_rising_timestamp/1e3), ctime(&time));
     wait_trigger = 0;
+
+    // Write trigger timestamp to events file
+    beam_rise_event_to_file(
+        events_file,
+        beam_rising_timestamp
+    );
+}
+
+/* Function to handle FALLING beam line trigger */
+void beam_line_falling_trigger() {
+    time_t time = static_cast<time_t>(beam_falling_timestamp/1e9); // Convert nanoseconds to seconds
+    fprintf(stdout,"Beam FALLING signal timestamp: %lu [us], %s\n", (unsigned long)(beam_falling_timestamp/1e3), ctime(&time));
+
+    // Write trigger timestamp to events file
+    beam_fall_event_to_file(
+        events_file,
+        beam_falling_timestamp
+    );
+}
+
+/* Function to handle Arduino trigger GPIO interrupt */
+void arduino_trigger() {
+    time_t time = static_cast<time_t>(arduino_timestamp/1e9); // Convert nanoseconds to seconds
+    fprintf(stdout,"Arduino signal timestamp: %lu [us], %s\n", (unsigned long)(arduino_timestamp/1e3), ctime(&time));
+
+    // Write trigger timestamp to events file
+    arduino_event_to_file(
+        events_file,
+        arduino_timestamp
+    );
 }
 
 /* ---------------------- */
@@ -316,10 +457,10 @@ void atexit_handler() {
     fprintf(stdout,"Cleaning up resources...\n");
 
     // Timestamp end of application
-    app_end_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    time_convert = static_cast<time_t>(app_end_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"\nProgram end timestamp: %lu [us], %s", app_end_time, ctime(&time_convert));
-    fprintf(stdout,"Program duration: %lu [us]\n", app_end_time - app_start_time);
+    app_end_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    time_convert = static_cast<time_t>(app_end_timestamp/1e6); // Convert microseconds to seconds
+    fprintf(stdout,"\nProgram end timestamp: %lu [us], %s", app_end_timestamp, ctime(&time_convert));
+    fprintf(stdout,"Program duration: %lu [us]\n", app_end_timestamp - app_start_timestamp);
 
     // Free up memories
     free(A);
@@ -338,8 +479,6 @@ void atexit_handler() {
             file_A_name,
             file_B_name,
             file_C_name,
-            app_start_time,
-            app_end_time,
             // kernel_launch_start_time,
             // kernel_launch_end_time,
             enable_trigger_signal,
@@ -405,9 +544,9 @@ void atexit_handler() {
 int main(int argc, char **argv){
     fprintf(stdout, "\n--------------------------------------------------------------------------\n");
     // Print start timestamp
-    app_start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    time_convert = static_cast<time_t>(app_start_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"Program start timestamp: %lu [us], %s", app_start_time, ctime(&time_convert));
+    app_start_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    time_convert = static_cast<time_t>(app_start_timestamp/1e6); // Convert microseconds to seconds
+    fprintf(stdout,"Program start timestamp: %lu [us], %s", app_start_timestamp, ctime(&time_convert));
 
     // Register atexit handler to ensure it gets called on normal exit
     const int result = std::atexit(atexit_handler); // Handler will be called
@@ -599,14 +738,14 @@ int main(int argc, char **argv){
         cudaDeviceSynchronize();
         cudaEventRecord(sanity_start);
         uint64_t sanity_kernel_start_time;
-        timestamp_kernel(&sanity_kernel_start_time);
+        save_timestamp(&sanity_kernel_start_time);
         ft_sgemm_medium<<<gridDim, blockDim>>>(M, N, K, dA, dB, dC[0], alpha, beta); // , dcheck_A_col, dcheck_B_row, d_debug_int);
 
         // Timestamp end of kernel with cuda event
         cudaEventRecord(sanity_stop);
         cudaEventSynchronize(sanity_stop);
         uint64_t sanity_kernel_end_time;
-        timestamp_kernel(&sanity_kernel_end_time);
+        save_timestamp(&sanity_kernel_end_time);
         cudaEventElapsedTime(&sanity_time_ms, sanity_start, sanity_stop);
         fprintf(stdout,"Sanity check kernel execution time: %f ms\n", sanity_time_ms);
 
@@ -621,18 +760,13 @@ int main(int argc, char **argv){
         printf("Calcuating SEU count for sanity check...\n");
         count_seu_errors(C[0], C_ref, M, N, &seu_count, error_row_idx, error_col_idx, error_value);
 
-        write_events_to_file(
+        kernel_event_to_file(
             events_file,
             -1,
             seu_count,
             (uint64_t)(sanity_time_ms * 1000), // Convert ms to us, CUDA event timing
             sanity_kernel_start_time, // Start timestamp of sanity check kernel, OS timestamp timing
-            sanity_kernel_end_time, // End timestamp of sanity check kernel, OS timestamp timing
-            0,
-            0,
-            0,
-            app_start_time,
-            app_end_time
+            sanity_kernel_end_time // End timestamp of sanity check kernel, OS timestamp timing
         );
 
         #ifdef ENABLE_SEU_DATA_LOGGING
@@ -649,30 +783,72 @@ int main(int argc, char **argv){
         fprintf(stdout,"Sanity check completed. SEUs prior to beam detected: %d\n", seu_count);
     }
 
-    /* -------------------------------------- */
-    /* Wait for trigger signal from beam line */
-    /* -------------------------------------- */
+    /* ----------------------------------------------- */
+    /* Setup trigger signal from beam line and Arduino */
+    /* ----------------------------------------------- */
 
+    // Prepare variables for GPIO setup
+    int Init;
+    int stat;
+
+    // Intitalize Orin GPIO library
+    Init = gpioInitialise();
+    if (Init < 0) {
+        fprintf(stdout,"Jetgpio initialisation failed. Error code:  %d\n", Init);
+        exit(1);
+    }
+
+    // Set up GPIO pin for RISING trigger signal from beam line
+    stat = gpioSetMode(beam_rising_gpio, JET_INPUT); // Set GPIO pin as input
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set pin mode for RISING trigger GPIO %d. Error code: %d\n", beam_rising_gpio, stat);
+        exit(1);
+    }
+    // Set up interrupt handler for RISING edge on the trigger GPIO pin
+    stat = gpioSetISRFunc(beam_rising_gpio, RISING_EDGE, 10 /* us */, &beam_rising_timestamp, &beam_line_rising_trigger);
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set alert function for RISING trigger GPIO %d. Error code: %d\n", beam_rising_gpio, stat);
+        exit(1);
+    }
+    fprintf(stdout,"GPIO pin %d set up for RISING trigger signal from beam line.\n", beam_rising_gpio);
+
+    // Set up GPIO pin for FALLING trigger signal from beam line
+    stat = gpioSetMode(beam_falling_gpio, JET_INPUT); // Set GPIO pin as input
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set pin mode for FALLING trigger GPIO %d. Error code: %d\n", beam_falling_gpio, stat);
+        exit(1);
+    }
+    // Set up interrupt handler for FALLING edge on the trigger GPIO pin
+    stat = gpioSetISRFunc(beam_falling_gpio, FALLING_EDGE, 10 /* us */, &beam_falling_timestamp, &beam_line_falling_trigger);
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set alert function for FALLING trigger GPIO %d. Error code: %d\n", beam_falling_gpio, stat);
+        exit(1);
+    }
+    fprintf(stdout,"GPIO pin %d set up for FALLING trigger signal from beam line.\n", beam_falling_gpio);
+
+    // Set up GPIO pin for Arduino signal from beam line
+    stat = gpioSetMode(arduino_gpio, JET_INPUT); // Set GPIO pin as input
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set pin mode for Arduino GPIO %d. Error code: %d\n", arduino_gpio, stat);
+        exit(1);
+    }
+    // Set up interrupt handler for Arduino RISING trigger GPIO pin
+    stat = gpioSetISRFunc(arduino_gpio, RISING_EDGE, 10 /* us */, &arduino_timestamp, &arduino_trigger);
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set alert function for Arduino RISING trigger GPIO %d. Error code: %d\n", arduino_gpio, stat);
+        exit(1);
+    }
+    fprintf(stdout,"GPIO pin %d set up for Arduino RISING trigger signal from beam line.\n", arduino_gpio);
+
+    // Wait for beam trigger if enabled
     if (enable_trigger_signal)
     {
-        int Init = gpioInitialise();
-        if (Init < 0) {
-            fprintf(stdout,"Jetgpio initialisation failed. Error code:  %d\n", Init);
-            exit(1);
-        }
-        int stat = gpioSetMode(trigger_gpio, JET_INPUT); // Set GPIO pin as input
-        if (stat < 0)
-        {
-            fprintf(stdout,"Failed to set GPIO pin mode. Error code: %d\n", stat);
-            exit(1);
-        }
-        // Set up interrupt handler for falling edge on the trigger GPIO pin
-        stat = gpioSetISRFunc(trigger_gpio, FALLING_EDGE, 10 /* us */, &trigger_timestamp, &beam_line_trigger_handler);
-        if (stat < 0)
-        {
-            fprintf(stdout,"Failed to set GPIO alert function. Error code: %d\n", stat);
-            exit(1);
-        }
         fprintf(stdout,"Waiting for trigger signal from beam line...\n");
         while (wait_trigger) {
             // Wait for the GPIO pin to go high
@@ -681,7 +857,7 @@ int main(int argc, char **argv){
     }
     else
     {
-        fprintf(stdout,"Trigger signal reception is DISABLED. Starting kernel execution immediately...\n");
+        fprintf(stdout,"Waiting for trigger signal reception is DISABLED. Starting kernel execution immediately...\n");
     }
     
     fprintf(stdout,"Starting kernel execution...\n");
@@ -715,6 +891,7 @@ int main(int argc, char **argv){
     int completed_streams = 0;
     bool stream_completed[repeat_kernel] = {false}; // Track completion status of each stream
     bool stream_running[repeat_kernel] = {false}; // Track running status of each stream
+    uint64_t error_timestamp = 0; // Track timestamp of any error
     uint64_t kernel_exec_start_time[repeat_kernel] = {0}; // Track start time of each kernel
     uint64_t kernel_exec_end_time[repeat_kernel] = {0}; // Track end time of each kernel
     int active_streams[MAX_CONCURRENT_KERNELS]; // Track active streams
@@ -732,10 +909,11 @@ int main(int argc, char **argv){
         /* ------------------------- */
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
-            fprintf(stdout, "ERROR detected: (%s) %s\n", cudaGetErrorName(err), cudaGetErrorString(err));
+            save_timestamp(&error_timestamp);
+            fprintf(stdout, "ERROR: CUDA error detected at %lu: (%s) %s\n", error_timestamp, cudaGetErrorName(err), cudaGetErrorString(err));
 
             // Report which streams were active at the time of the error
-            fprintf(stdout, "Current active streams: ");
+            fprintf(stdout, "WARNING: Current active streams: ");
             for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
                 if (active_streams[i] != -1) {
                     fprintf(stdout,"%d,", active_streams[i]);
@@ -744,12 +922,16 @@ int main(int argc, char **argv){
             fprintf(stdout, "\n");
 
             // Save error to events file
-            // TODO
+            error_event_to_file(
+                events_file,
+                (int)err,
+                error_timestamp
+            );
 
             // Cleanup and destroy all streams
             for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
                 if (active_streams[i] != -1) {
-                    fprintf(stdout,"Repetition %d cancelled due to some CUDA error.\n", active_streams[i]);
+                    fprintf(stdout,"WARNING: Repetition %d cancelled due to some CUDA error.\n", active_streams[i]);
 
                     // Check for SEU errors for the active streams
                     // TODO
@@ -781,7 +963,7 @@ int main(int argc, char **argv){
 
                 // Reset the device to recover from the error
                 cudaDeviceReset();
-                fprintf(stdout,"CUDA device was reset. Exiting application.\n");
+                fprintf(stdout,"WARNING: CUDA device was reset. Exiting application.\n");
 
                 // Exit application
                 exit(-1);
@@ -796,9 +978,9 @@ int main(int argc, char **argv){
 
             // Handle one completed stream at a time
             if (cudaEventQuery(kernel_stop[i]) == cudaSuccess) {
-                timestamp_kernel(&(kernel_exec_end_time[active_streams[i]])); // Record end time
+                save_timestamp(&(kernel_exec_end_time[active_streams[i]])); // Record end time
                 cudaEventElapsedTime(&kernel_time_ms[active_streams[i]], kernel_start[i], kernel_stop[i]);
-                fprintf(stdout,"%d - CPU: %lu us, CUDA: %d us, ", active_streams[i], kernel_exec_end_time[active_streams[i]] - kernel_exec_start_time[active_streams[i]], int(kernel_time_ms[active_streams[i]]*1000.0));
+                fprintf(stdout,"INFO: %d - CPU: %lu us, CUDA: %d us, ", active_streams[i], kernel_exec_end_time[active_streams[i]] - kernel_exec_start_time[active_streams[i]], int(kernel_time_ms[active_streams[i]]*1000.0));
 
                 // Copy results from device to host for this repetition
                 cudaMemcpyAsync(C[i], dC[i], sizeof(float) * M * N, cudaMemcpyDeviceToHost, mem_stream);
@@ -818,18 +1000,13 @@ int main(int argc, char **argv){
                 fprintf(stdout, "\n");
 
                 // Save events to file for this repetition
-                write_events_to_file(
+                kernel_event_to_file(
                     events_file,
                     active_streams[i],
                     seu_count,
                     (uint64_t)(kernel_time_ms[active_streams[i]] * 1000), // Convert ms to us, CUDA Event timing
                     kernel_exec_start_time[active_streams[i]], // Start timestamp of this kernel, OS timestamp timing
-                    kernel_exec_end_time[active_streams[i]], // End timestamp of this kernel, OS timestamp timing
-                    0,
-                    0,
-                    0,
-                    app_start_time,
-                    app_end_time
+                    kernel_exec_end_time[active_streams[i]] // End timestamp of this kernel, OS timestamp timing
                 );
 
                 // Save seu data to file for this repetition
@@ -884,7 +1061,7 @@ int main(int argc, char **argv){
                     stream_running[new_repetition] = true; // Mark this stream as running
 
                     // Launch the kernel for this repetition
-                    timestamp_kernel(&(kernel_exec_start_time[new_repetition])); // Record start time
+                    save_timestamp(&(kernel_exec_start_time[new_repetition])); // Record start time
                     cudaEventRecord(kernel_start[i], kernel_stream[i]);
                     if(kernel_number == 11){
                         dim3 blockDim(64);  
@@ -908,7 +1085,7 @@ int main(int argc, char **argv){
                     }
                     else
                     {
-                        fprintf(stdout,"Kernel number %d is not implemented. Exiting...\n", kernel_number);
+                        fprintf(stdout,"ERROR: Kernel number %d is not implemented. Exiting application.\n", kernel_number);
                         exit(-1);
                     }
                     cudaEventRecord(kernel_stop[i], kernel_stream[i]);
