@@ -2,8 +2,9 @@ import numpy as np
 import os
 import sys
 
-# cuda data types [bytes]: unsigned int: 4, int: 4, char: 1, float: 4
+# cuda data types [bytes]: unsigned int: 4, int: 4, char: 1, float: 4, long long int: 8
 # CUDA data type sizes in [bytes]
+LONG_LONG_INT_SIZE = 8
 UNSIGNED_INT_SIZE = 4
 INT_SIZE = 4
 CHAR_SIZE = 1
@@ -58,7 +59,7 @@ if __name__ == "__main__":
             # Read repetition and seu_count from the binary data
             repetition = int.from_bytes(f.read(INT_SIZE), byteorder='little', signed=True)
             f.read(CHAR_SIZE) # Read comma
-            seu_count = int.from_bytes(f.read(INT_SIZE), byteorder='little', signed=True)
+            seu_count = int.from_bytes(f.read(LONG_LONG_INT_SIZE), byteorder='little', signed=True)
             f.read(CHAR_SIZE) # Read comma
             print(f"Repetition: {repetition}, SEU Count: {seu_count}")
 

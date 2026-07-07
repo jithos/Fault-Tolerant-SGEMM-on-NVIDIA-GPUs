@@ -36,7 +36,7 @@
 // #define ENABLE_SEU_DATA_LOGGING
 
 // /* Global variable to interrupt the loop later on */
-static volatile int wait_trigger = 1;
+static volatile int wait_trigger = 0;
 unsigned long trigger_timestamp;
 unsigned long beam_rising_timestamp;
 unsigned long beam_falling_timestamp;
@@ -73,10 +73,11 @@ std::fstream *results_file = NULL;
 std::fstream *events_file = NULL;
 std::fstream *seu_data_file = NULL;
 int matrix_size = 99;
-int seu_count = 0;
-int seu_count_total = 0;
+long long int seu_count = 0;
+long long int seu_count_total = 0;
 int kernel_number = 12; // 12 is used as default kernel number
-int repeat_kernel = 1; // Default of repetitions for the kernel execution
+int repeat_kernel = -1; // Default of repetitions for the kernel execution
+int completed_streams = 0;
 
 /* Global variables for CUDA events */
 float sanity_time_ms = 0.0f;
@@ -120,7 +121,8 @@ void write_header_to_results_file(std::fstream *file) {
         << "sanity_check_enabled" << ","
         << "seu_count_total" << ","
         << "kernel_number" << ","
-        << "repeat_kernel" << "\n";
+        << "repeat_kernel" << ","
+        << "completed_streams" << "\n";
     // fprintf(stdout,results_header.str().c_str());
     (*file) << results_header.str();
     (*file).flush(); // Ensure everything is written to the file immediately
@@ -163,9 +165,10 @@ void write_results_to_file(
         bool trigger_signal_enabled,
         bool seu_data_logging_enabled,
         bool sanity_check_enabled,
-        unsigned int seu_count_total,
+        long long int seu_count_total,
         int kernel_number,
-        int repeat_kernel
+        int repeat_kernel,
+        int completed_streams
     ) {
 
     // Write the results as a new line in the CSV file
@@ -184,7 +187,8 @@ void write_results_to_file(
         << sanity_check_enabled << ","
         << seu_count_total << ","
         << kernel_number << ","
-        << repeat_kernel << "\n";
+        << repeat_kernel << ","
+        << completed_streams << "\n";
 
     (*file) << result_line.str();
     // (*file).flush(); // Ensure everything is written to the file immediately
@@ -193,7 +197,7 @@ void write_results_to_file(
 void write_events_to_file(
         std::fstream *file,
         int repetition, // kernel info
-        unsigned int seu_count, // kernel info
+        long long int seu_count, // kernel info
         uint64_t kernel_duration, // kernel info
         uint64_t kernel_start_timestamp, // kernel info
         uint64_t kernel_end_timestamp, // kernel info
@@ -228,7 +232,7 @@ void write_events_to_file(
 void write_seu_data_to_file(
     std::fstream *file,
     int repetition,
-    int seu_count,
+    long long int seu_count,
     int* error_col_index,
     int* error_row_index,
     float* error_value
@@ -238,7 +242,7 @@ void write_seu_data_to_file(
     // Write the error indices and values
     (*file).write(reinterpret_cast<const char*>(&repetition), sizeof(int));
     (*file).write(",", sizeof(char)); // Separator
-    (*file).write(reinterpret_cast<const char*>(&seu_count), sizeof(unsigned int));
+    (*file).write(reinterpret_cast<const char*>(&seu_count), sizeof(long long int));
     (*file).write(",", sizeof(char)); // Separator
     if (seu_count > 0)
     {
@@ -252,7 +256,7 @@ void write_seu_data_to_file(
 void kernel_event_to_file(
         std::fstream *file,
         int repetition, // kernel info
-        unsigned int seu_count, // kernel info
+        long long int seu_count, // kernel info
         uint64_t kernel_duration, // kernel info
         uint64_t kernel_start_timestamp, // kernel info
         uint64_t kernel_end_timestamp, // kernel info
@@ -375,7 +379,7 @@ void save_timestamp(void* data)
 /* Error Counting Functions */
 /* ------------------------ */
 
-void count_seu_errors(float* C, float* C_ref, int M, int N, int* seu_count, int* error_row_idx, int* error_col_idx, float* error_value)
+void count_seu_errors(float* C, float* C_ref, int M, int N, long long int* seu_count, int* error_row_idx, int* error_col_idx, float* error_value)
 {
     *seu_count = 0;
     for (int i = 0; i < M * N; i++) {
@@ -473,6 +477,9 @@ void signal_handler(int signum) {
 void atexit_handler() {
     fprintf(stdout,"Cleaning up resources...\n");
 
+    // Print summary
+    fprintf(stdout, "Completed streams: %d, Total SEU count: %lld\n", completed_streams, seu_count_total);
+
     // Timestamp end of application
     app_end_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     time_convert = static_cast<time_t>(app_end_timestamp/1e6); // Convert microseconds to seconds
@@ -503,7 +510,8 @@ void atexit_handler() {
             enable_sanity_check,
             seu_count_total,
             kernel_number,
-            repeat_kernel
+            repeat_kernel,
+            completed_streams
         );
 
         results_file->flush();
@@ -798,7 +806,7 @@ int main(int argc, char **argv){
         );
         #endif
 
-        fprintf(stdout,"Sanity check completed. SEUs prior to beam detected: %d\n", seu_count);
+        fprintf(stdout,"Sanity check completed. SEUs prior to beam detected: %lld\n", seu_count);
     }
 
     /* ----------------------------------------------- */
@@ -867,6 +875,7 @@ int main(int argc, char **argv){
     // Wait for beam trigger if enabled
     if (enable_trigger_signal)
     {
+        wait_trigger = 1; // Enable waiting for trigger
         fprintf(stdout,"Waiting for trigger signal from beam line...\n");
         while (wait_trigger) {
             // Wait for the GPIO pin to go high
@@ -899,19 +908,18 @@ int main(int argc, char **argv){
         cudaEventCreate(&kernel_stop[i]);
         cudaStreamCreateWithFlags(&kernel_stream[i], cudaStreamNonBlocking);
     }
-    kernel_time_ms = (float*)malloc(sizeof(float) * repeat_kernel);
+    kernel_time_ms = (float*)malloc(sizeof(float) * MAX_CONCURRENT_KERNELS);
 
     // CONCURRENT STREAM SCHEDULING - START
 
     /* --------------------------------------- */
     /* Concurrent streaming scheduling - SETUP */
     /* --------------------------------------- */
-    int completed_streams = 0;
-    bool stream_completed[repeat_kernel] = {false}; // Track completion status of each stream
-    bool stream_running[repeat_kernel] = {false}; // Track running status of each stream
+    completed_streams = 0;
     uint64_t error_timestamp = 0; // Track timestamp of any error
-    uint64_t kernel_exec_start_time[repeat_kernel] = {0}; // Track start time of each kernel
-    uint64_t kernel_exec_end_time[repeat_kernel] = {0}; // Track end time of each kernel
+    uint64_t kernel_exec_start_time[MAX_CONCURRENT_KERNELS] = {0}; // Track start time of each kernel
+    uint64_t kernel_exec_end_time[MAX_CONCURRENT_KERNELS] = {0}; // Track end time of each kernel
+    int scheduled_streams = 0;
     int active_streams[MAX_CONCURRENT_KERNELS]; // Track active streams
     for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
         active_streams[i] = -1;
@@ -924,7 +932,7 @@ int main(int argc, char **argv){
     /* -------------------------------------- */
     /* Concurrent streaming scheduling - LOOP */
     /* -------------------------------------- */
-    while (completed_streams < repeat_kernel) {
+    while (completed_streams < repeat_kernel || repeat_kernel == -1) {
     
         /* ------------------------- */
         /* Check for any CUDA errors */
@@ -976,8 +984,8 @@ int main(int argc, char **argv){
                         fprintf(stdout, "No kernel timeout\n");
 
                         // Record kernel execution time and end timestamp
-                        save_timestamp(&(kernel_exec_end_time[active_streams[i]])); // Record end time
-                        cudaEventElapsedTime(&kernel_time_ms[active_streams[i]], kernel_start[i], kernel_stop[i]);
+                        save_timestamp(&(kernel_exec_end_time[i])); // Record end time
+                        cudaEventElapsedTime(&kernel_time_ms[i], kernel_start[i], kernel_stop[i]);
 
                         // Copy results from device to host for this repetition
                         cudaMemcpyAsync(C[i], dC[i], sizeof(float) * M * N, cudaMemcpyDeviceToHost, mem_stream);
@@ -990,9 +998,9 @@ int main(int argc, char **argv){
                             events_file,
                             active_streams[i],
                             seu_count,
-                            (uint64_t)(kernel_time_ms[active_streams[i]] * 1000), // Convert ms to us, CUDA Event timing
-                            kernel_exec_start_time[active_streams[i]], // Start timestamp of this kernel, OS timestamp timing
-                            kernel_exec_end_time[active_streams[i]], // End timestamp of this kernel, OS timestamp timing
+                            (uint64_t)(kernel_time_ms[i] * 1000), // Convert ms to us, CUDA Event timing
+                            kernel_exec_start_time[i], // Start timestamp of this kernel, OS timestamp timing
+                            kernel_exec_end_time[i], // End timestamp of this kernel, OS timestamp timing
                             true // repetition_cancelled
                         );
 
@@ -1022,15 +1030,13 @@ int main(int argc, char **argv){
                             active_streams[i],
                             0, // seu_count
                             0, // Convert ms to us, CUDA Event timing
-                            kernel_exec_start_time[active_streams[i]], // Start timestamp of this kernel, OS timestamp timing
+                            kernel_exec_start_time[i], // Start timestamp of this kernel, OS timestamp timing
                             0, // End timestamp of this kernel, OS timestamp timing
                             true // repetition_cancelled
                         );
                     }
 
                     // LAST STEP - Update state variables for the cancelled stream
-                    stream_running[active_streams[i]] = false; // Mark this stream as no longer running
-                    stream_completed[active_streams[i]] = true; // Mark this stream as not completed
                     active_streams[i] = -1; // Mark this stream as inactive
                     completed_streams++;
                 }
@@ -1082,9 +1088,9 @@ int main(int argc, char **argv){
 
             // Handle one completed stream at a time
             if (cudaEventQuery(kernel_stop[i]) == cudaSuccess) {
-                save_timestamp(&(kernel_exec_end_time[active_streams[i]])); // Record end time
-                cudaEventElapsedTime(&kernel_time_ms[active_streams[i]], kernel_start[i], kernel_stop[i]);
-                fprintf(stdout,"INFO: %d - CPU: %lu us, CUDA: %d us, ", active_streams[i], kernel_exec_end_time[active_streams[i]] - kernel_exec_start_time[active_streams[i]], int(kernel_time_ms[active_streams[i]]*1000.0));
+                save_timestamp(&(kernel_exec_end_time[i])); // Record end time
+                cudaEventElapsedTime(&kernel_time_ms[i], kernel_start[i], kernel_stop[i]);
+                fprintf(stdout,"INFO: %d - CPU: %lu us, CUDA: %d us, ", active_streams[i], kernel_exec_end_time[i] - kernel_exec_start_time[i], int(kernel_time_ms[i]*1000.0));
 
                 // Copy results from device to host for this repetition
                 cudaMemcpyAsync(C[i], dC[i], sizeof(float) * M * N, cudaMemcpyDeviceToHost, mem_stream);
@@ -1097,7 +1103,7 @@ int main(int argc, char **argv){
 
                 // Check for SEU errors for this repetition
                 count_seu_errors(C[i], C_ref, M, N, &seu_count, error_row_idx, error_col_idx, error_value);
-                // fprintf(stdout,"SEU: %d (tot. %d)\n", seu_count, seu_count_total + seu_count);
+                fprintf(stdout,"SEU: %lld (tot. %lld)", seu_count, seu_count_total + seu_count);
                 // if (seu_count > 0) {
                 //     fprintf(stdout, "c: %d, r: %d, v: %e\n", error_col_idx[0], error_row_idx[0], error_value[0]);
                 // }
@@ -1108,9 +1114,9 @@ int main(int argc, char **argv){
                     events_file,
                     active_streams[i],
                     seu_count,
-                    (uint64_t)(kernel_time_ms[active_streams[i]] * 1000), // Convert ms to us, CUDA Event timing
-                    kernel_exec_start_time[active_streams[i]], // Start timestamp of this kernel, OS timestamp timing
-                    kernel_exec_end_time[active_streams[i]], // End timestamp of this kernel, OS timestamp timing
+                    (uint64_t)(kernel_time_ms[i] * 1000), // Convert ms to us, CUDA Event timing
+                    kernel_exec_start_time[i], // Start timestamp of this kernel, OS timestamp timing
+                    kernel_exec_end_time[i], // End timestamp of this kernel, OS timestamp timing
                     false // repetition_cancelled
                 );
 
@@ -1130,8 +1136,6 @@ int main(int argc, char **argv){
                 seu_count_total += seu_count;
 
                 // LAST STEP - Update state variables
-                stream_completed[active_streams[i]] = true;
-                stream_running[active_streams[i]] = false;
                 active_streams[i] = -1; // Mark this stream as inactive
                 completed_streams++;
 
@@ -1143,58 +1147,46 @@ int main(int argc, char **argv){
         /* Schedule new kernels for any inactive streams */
         /* --------------------------------------------- */
         for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
+
             // Find an inactive stream slot
             if (active_streams[i] == -1) {
-                int new_repetition = -1;
 
-                // Check which stream needs scheduling
-                for (int j = 0; j < repeat_kernel; j++) {
-                    if (!stream_completed[j] && !stream_running[j]) {
-                        active_streams[i] = j;
-                        new_repetition = j;
-                        break;
-                    }
+                // Assign the next repetition to this stream
+                active_streams[i] = scheduled_streams;
+                scheduled_streams++; // Increment the scheduled streams counter
+
+                // Launch the kernel for this repetition
+                save_timestamp(&(kernel_exec_start_time[i])); // Record start time
+                cudaEventRecord(kernel_start[i], kernel_stream[i]);
+                if(kernel_number == 11){
+                    dim3 blockDim(64);
+                    dim3 gridDim(CEIL_DIV(M, 16), CEIL_DIV(N, 16));
+                    #ifdef SYNC_BETWEEN_KERNELS
+                    cudaDeviceSynchronize();
+                    #endif
+                    ft_sgemm_small<<<gridDim, blockDim, 0, kernel_stream[i]>>>(M, N, K, dA, dB, dC[i], alpha, beta);
                 }
-
-                // Launch the kernel for the new active stream if found
-                if (new_repetition != -1)
+                else if(kernel_number == 12){
+                    dim3 blockDim(64);
+                    dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
+                    #ifdef SYNC_BETWEEN_KERNELS
+                    cudaDeviceSynchronize();
+                    #endif
+                    // TODO: Remove after DEBUGGING - START
+                    int mem_access_error = 0;
+                    // if (active_streams[i] == 7) mem_access_error = M * N * sizeof(float) * repeat_kernel; // -> illegal memory access error
+                    // if (active_streams[i] == 2) cudaMalloc((void**)&dC[i], -1); // -> device out of memory and subsequent illegal memory access error
+                    // TODO: Remove after DEBUGGING - END
+                    ft_sgemm_medium<<<gridDim, blockDim, 0, kernel_stream[i]>>>(M, N, K, dA, dB, dC[i]+mem_access_error, alpha, beta);
+                }
+                else
                 {
-                    // Mark this stream as running
-                    stream_running[new_repetition] = true; // Mark this stream as running
-
-                    // Launch the kernel for this repetition
-                    save_timestamp(&(kernel_exec_start_time[new_repetition])); // Record start time
-                    cudaEventRecord(kernel_start[i], kernel_stream[i]);
-                    if(kernel_number == 11){
-                        dim3 blockDim(64);  
-                        dim3 gridDim(CEIL_DIV(M, 16), CEIL_DIV(N, 16));
-                        #ifdef SYNC_BETWEEN_KERNELS
-                        cudaDeviceSynchronize();
-                        #endif
-                        ft_sgemm_small<<<gridDim, blockDim, 0, kernel_stream[i]>>>(M, N, K, dA, dB, dC[i], alpha, beta);
-                    }  
-                    else if(kernel_number == 12){
-                        dim3 blockDim(64);  
-                        dim3 gridDim(CEIL_DIV(M, 32), CEIL_DIV(N, 32));
-                        #ifdef SYNC_BETWEEN_KERNELS
-                        cudaDeviceSynchronize();
-                        #endif
-                        // TODO: Remove after DEBUGGING - START
-                        int mem_access_error = 0;
-                        // if (new_repetition == 7) mem_access_error = M * N * sizeof(float) * repeat_kernel; // -> illegal memory access error
-                        // if (new_repetition == 2) cudaMalloc((void**)&dC[i], -1); // -> device out of memory and subsequent illegal memory access error
-                        // TODO: Remove after DEBUGGING - END
-                        ft_sgemm_medium<<<gridDim, blockDim, 0, kernel_stream[i]>>>(M, N, K, dA, dB, dC[i]+mem_access_error, alpha, beta);
-                    }
-                    else
-                    {
-                        fprintf(stdout,"ERROR: Kernel number %d is not implemented. Exiting application.\n", kernel_number);
-                        exit(-1);
-                    }
-                    cudaEventRecord(kernel_stop[i], kernel_stream[i]);
-
-                    // fprintf(stdout,"Repetition %d started.\n", new_repetition);
+                    fprintf(stdout,"ERROR: Kernel number %d is not implemented. Exiting application.\n", kernel_number);
+                    exit(-1);
                 }
+                cudaEventRecord(kernel_stop[i], kernel_stream[i]);
+
+                // fprintf(stdout,"Repetition %d started.\n", active_streams[i]);
             }
         }
     }
@@ -1229,7 +1221,7 @@ int main(int argc, char **argv){
     }
 
     // Print total SEU errors across all repetitions
-    fprintf(stdout,"Total SEU errors across all repetitions: %d\n", seu_count_total);
+    fprintf(stdout,"Total SEU errors across all repetitions: %lld\n", seu_count_total);
 
     exit(0); // Exit normally to ensure atexit handler is called
 }
