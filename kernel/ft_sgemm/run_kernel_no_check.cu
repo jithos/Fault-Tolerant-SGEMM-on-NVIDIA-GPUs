@@ -26,7 +26,6 @@
 // #define SYNC_BETWEEN_KERNELS
 #define MAX_CONCURRENT_KERNELS 2
 
-// #define DO_CUBLAS_VERIFICATION
 // #define ENABLE_SEU_DATA_LOGGING
 
 // /* Global variable to interrupt the loop later on */
@@ -329,9 +328,6 @@ void atexit_handler() {
     free(C_ref);
     free(check_C_col);
     free(check_C_row);
-    #ifdef DO_CUBLAS_VERIFICATION
-    free(C_BLAS);
-    #endif
 
     // Flush and close files
     if (results_file != NULL){
@@ -548,11 +544,6 @@ int main(int argc, char **argv){
     //     C_ref[i] *= 0.1;
     // }
 
-    #ifdef DO_CUBLAS_VERIFICATION
-    C_BLAS = (float *)calloc(M * N, sizeof(float));
-    // memset(C_BLAS, 0.0, sizeof(C_BLAS));
-    #endif
-
     printf("Allocating device memory...\n");
     CUDA_CALLER(cudaMalloc((void**) &dA, sizeof(float) * M * N));
     CUDA_CALLER(cudaMalloc((void**) &dB, sizeof(float) * M * K));  
@@ -565,11 +556,6 @@ int main(int argc, char **argv){
     for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
         cudaMalloc((void**) &(dC[i]), sizeof(float) * M * N);
     }
-
-    #ifdef DO_CUBLAS_VERIFICATION
-    CUDA_CALLER(cudaMalloc((void**) &dC_BLAS, sizeof(float) * M * N));
-    CUDA_CALLER(cudaMemcpy(dC_BLAS, C_BLAS, sizeof(float) * M * N, cudaMemcpyHostToDevice));
-    #endif
 
     /* -------------------- */
     /* Prepare output files */
@@ -708,11 +694,6 @@ int main(int argc, char **argv){
     /* -------------------- */
     /* Run selected kernels */
     /* -------------------- */
-
-    #ifdef DO_CUBLAS_VERIFICATION
-    fprintf(stdout,"Start cublas sgemm\n");
-    cublasSgemm(handle, CUBLAS_OP_N,CUBLAS_OP_T, M, N, K,  &alpha, dA, M, dB, N, &beta, dC_BLAS, M);
-    #endif
 
     // Setup cuda events and streams for kernel scheduling
     cudaEvent_t kernel_start[MAX_CONCURRENT_KERNELS], kernel_stop[MAX_CONCURRENT_KERNELS];
@@ -959,17 +940,6 @@ int main(int argc, char **argv){
     time_convert = static_cast<time_t>(kernel_launch_end_time/1e6); // Convert microseconds to seconds
     fprintf(stdout,"\nKernel launch end timestamp: %lu [us], %s", kernel_launch_end_time, ctime(&time_convert));
     fprintf(stdout,"Kernel launch duration: %lu [us]\n", kernel_launch_end_time - kernel_launch_start_time);
-
-    #ifdef DO_CUBLAS_VERIFICATION
-    cudaMemcpy(C_BLAS, dC_BLAS, sizeof(float) * M * N, cudaMemcpyDeviceToHost);
-    if (!verify_matrix(C_BLAS, C, M, N)) { 
-        fprintf(stdout,"kernel %d failed to pass the correctness verification against NVIDIA cuBLAS. Exited.\n", kernel_number);
-        // exit(-3);  
-    }    
-    fflush(stdout);              
-    fprintf(stdout,"kernel %d finish verified!\n", kernel_number);      
-    cudaDeviceSynchronize();
-    #endif
 
     // Clean up CUDA events and streams
     for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
