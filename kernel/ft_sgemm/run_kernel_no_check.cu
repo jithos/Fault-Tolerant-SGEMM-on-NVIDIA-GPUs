@@ -486,6 +486,9 @@ void atexit_handler() {
     fprintf(stdout,"\nProgram end timestamp: %lu [us], %s", app_end_timestamp, ctime(&time_convert));
     fprintf(stdout,"Program duration: %lu [us]\n", app_end_timestamp - app_start_timestamp);
 
+    // Release pheripherals
+    gpioTerminate();
+
     // Free up memories
     free(A);
     free(B);
@@ -530,9 +533,6 @@ void atexit_handler() {
         fprintf(stdout,"Saved SEU data to %s\n", seu_data_file_path.c_str());
     }
     #endif
-
-    // Release pheripherals
-    gpioTerminate();
 
     // reset CUDA device to cleanup
     cudaDeviceReset();
