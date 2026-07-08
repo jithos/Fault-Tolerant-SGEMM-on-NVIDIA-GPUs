@@ -46,8 +46,8 @@ unsigned long arduino_timestamp;
 
 // /* Variable for trigger GPIO pin */
 int beam_start_gpio = 7;
-int beam_stop_gpio = 12;
-int arduino_gpio = 13;
+int beam_stop_gpio = 11;
+int arduino_gpio = 12;
 
 /* Global variables */
 time_t time_convert;
