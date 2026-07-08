@@ -30,6 +30,9 @@
 
 // #define SANITY_CHECK_EVENT_ID -1
 #define NULL_EVENT_ID -2
+#define BEAM_START_EVENT_ID -10
+#define BEAM_STOP_EVENT_ID -11
+#define ARDUINO_EVENT_ID -12
 #define ERROR_EVENT_ID -99
 #define APP_EXIT_EVENT_ID -100
 
@@ -309,7 +312,7 @@ void beam_start_event_to_file(
 {
     write_events_to_file(
         file,
-        NULL_EVENT_ID, // repetition
+        BEAM_START_EVENT_ID, // repetition
         0, // seu_count
         0, // kernel_duration
         0, // kernel_start_timestamp
@@ -330,7 +333,7 @@ void beam_stop_event_to_file(
 {
     write_events_to_file(
         file,
-        NULL_EVENT_ID, // repetition
+        BEAM_STOP_EVENT_ID, // repetition
         0, // seu_count
         0, // kernel_duration
         0, // kernel_start_timestamp
@@ -351,7 +354,7 @@ void arduino_event_to_file(
 {
     write_events_to_file(
         file,
-        NULL_EVENT_ID, // repetition
+        ARDUINO_EVENT_ID, // repetition
         0, // seu_count
         0, // kernel_duration
         0, // kernel_start_timestamp
