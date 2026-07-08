@@ -36,15 +36,14 @@
 // #define ENABLE_SEU_DATA_LOGGING
 
 // /* Global variable to interrupt the loop later on */
-static volatile int wait_trigger = 0;
-unsigned long trigger_timestamp;
-unsigned long beam_rising_timestamp;
-unsigned long beam_falling_timestamp;
+static volatile int wait_beam_start = 0;
+unsigned long beam_start_timestamp;
+unsigned long beam_stop_timestamp;
 unsigned long arduino_timestamp;
 
 // /* Variable for trigger GPIO pin */
-int beam_rising_gpio = 7;
-int beam_falling_gpio = 12;
+int beam_start_gpio = 7;
+int beam_stop_gpio = 12;
 int arduino_gpio = 13;
 
 /* Global variables */
@@ -59,7 +58,7 @@ float *dcheck_C_col = NULL, *dcheck_C_row = NULL;
 const char* folder_name;
 const char* output_folder;
 const char* experiment_name;
-bool enable_trigger_signal = false;
+bool enable_beam_signal_wait = false;
 bool enable_sanity_check = false;
 bool enable_seu_data_logging = false;
 char file_A_name[256];
@@ -116,7 +115,7 @@ void write_header_to_results_file(std::fstream *file) {
         << "app_end_timestamp" << ","
         // << "kernel_launch_start_time" << ","
         // << "kernel_launch_end_time" << ","
-        << "trigger_signal_enabled" << ","
+        << "beam_signal_wait_enabled" << ","
         << "seu_data_logging_enabled" << ","
         << "sanity_check_enabled" << ","
         << "seu_count_total" << ","
@@ -145,8 +144,8 @@ void write_header_to_events_file(std::fstream *file) {
         << "repetition_cancelled" << ","
         << "cuda_error_code" << ","
         << "error_timestamp" << ","
-        << "trigger_rise_timestamp" << ","
-        << "trigger_fall_timestamp" << ","
+        << "beam_start_timestamp" << ","
+        << "beam_stop_timestamp" << ","
         << "arduino_timestamp" << ","
         << "app_start_timestamp" << ","
         << "app_end_timestamp" << "\n";
@@ -163,7 +162,7 @@ void write_results_to_file(
         char* file_C,
         // uint64_t kernel_launch_start_time,
         // uint64_t kernel_launch_end_time,
-        bool trigger_signal_enabled,
+        bool beam_signal_wait_enabled,
         bool seu_data_logging_enabled,
         bool sanity_check_enabled,
         long long int seu_count_total,
@@ -183,7 +182,7 @@ void write_results_to_file(
         << app_end_timestamp << "," // global variable for application end timestamp
         // << kernel_launch_start_time << ","
         // << kernel_launch_end_time << ","
-        << trigger_signal_enabled << ","
+        << beam_signal_wait_enabled << ","
         << seu_data_logging_enabled << ","
         << sanity_check_enabled << ","
         << seu_count_total << ","
@@ -205,8 +204,8 @@ void write_events_to_file(
         bool repetition_cancelled, // repetition info
         int cuda_error_code, // error info
         uint64_t error_timestamp, // error info
-        unsigned long trigger_rise_timestamp, // trigger info
-        unsigned long trigger_fall_timestamp, // trigger info
+        unsigned long beam_start_timestamp, // trigger info
+        unsigned long beam_stop_timestamp, // trigger info
         unsigned long arduino_timestamp // arduino info
     ) {
 
@@ -221,8 +220,8 @@ void write_events_to_file(
         << repetition_cancelled << ","
         << cuda_error_code << ","
         << error_timestamp << ","
-        << trigger_rise_timestamp << ","
-        << trigger_fall_timestamp << ","
+        << beam_start_timestamp << ","
+        << beam_stop_timestamp << ","
         << arduino_timestamp << ","
         << app_start_timestamp << "," // global variable for application start timestamp
         << app_end_timestamp << "\n"; // global variable for application end timestamp
@@ -274,8 +273,8 @@ void kernel_event_to_file(
         repetition_cancelled,
         0, // cuda_error_code
         0, // error_timestamp
-        0, // trigger_rise_timestamp
-        0, // trigger_fall_timestamp
+        0, // beam_start_timestamp
+        0, // beam_stop_timestamp
         0 // arduino_timestamp
     );
 }
@@ -297,15 +296,15 @@ void error_event_to_file(
         false, // repetition_cancelled
         cuda_error_code, // cuda_error_code
         error_time, // error_timestamp
-        0, // trigger_rise_timestamp
-        0, // trigger_fall_timestamp
+        0, // beam_start_timestamp
+        0, // beam_stop_timestamp
         0 // arduino_timestamp
     );
 }
 
-void beam_rise_event_to_file(
+void beam_start_event_to_file(
         std::fstream *file,
-        unsigned long trigger_rise_timestamp // trigger info
+        unsigned long beam_start_timestamp // trigger info
 )
 {
     write_events_to_file(
@@ -318,15 +317,15 @@ void beam_rise_event_to_file(
         false, // repetition_cancelled
         0, // cuda_error_code
         0, // error_timestamp
-        trigger_rise_timestamp,
-        0, // trigger_fall_timestamp
+        beam_start_timestamp,
+        0, // beam_stop_timestamp
         0 // arduino_timestamp
     );
 }
 
-void beam_fall_event_to_file(
+void beam_stop_event_to_file(
         std::fstream *file,
-        unsigned long trigger_fall_timestamp // trigger info
+        unsigned long beam_stop_timestamp // trigger info
 )
 {
     write_events_to_file(
@@ -339,8 +338,8 @@ void beam_fall_event_to_file(
         false, // repetition_cancelled
         0, // cuda_error_code
         0, // error_timestamp
-        0, // trigger_rise_timestamp
-        trigger_fall_timestamp,
+        0, // beam_start_timestamp
+        beam_stop_timestamp,
         0 // arduino_timestamp
     );
 }
@@ -360,8 +359,8 @@ void arduino_event_to_file(
         false, // repetition_cancelled
         0, // cuda_error_code
         0, // error_timestamp
-        0, // trigger_rise_timestamp
-        0, // trigger_fall_timestamp
+        0, // beam_start_timestamp
+        0, // beam_stop_timestamp
         arduino_timestamp
     );
 }
@@ -420,32 +419,32 @@ void get_seu_indices(float* C, float* C_ref, int M, int N, int* error_row_idx, i
 /* Beam Line Trigger Functions */
 /* --------------------------- */
 
-/* Function to handle RISING beam line trigger */
-void beam_line_rising_trigger() {
-    time_t time = static_cast<time_t>(beam_rising_timestamp/1e9); // Convert nanoseconds to seconds
-    fprintf(stdout,"Beam RISING signal timestamp: %lu [us], %s\n", (unsigned long)(beam_rising_timestamp/1e3), ctime(&time));
-    wait_trigger = 0;
+/* Function to handle RISING edge beam START trigger */
+void beam_line_start_trigger() {
+    time_t time = static_cast<time_t>(beam_start_timestamp/1e9); // Convert nanoseconds to seconds
+    fprintf(stdout,"Beam START signal timestamp: %lu [us], %s\n", (unsigned long)(beam_start_timestamp/1e3), ctime(&time));
+    wait_beam_start = 0;
 
     // Write trigger timestamp to events file
-    beam_rise_event_to_file(
+    beam_start_event_to_file(
         events_file,
-        beam_rising_timestamp
+        beam_start_timestamp
     );
 }
 
-/* Function to handle FALLING beam line trigger */
-void beam_line_falling_trigger() {
-    time_t time = static_cast<time_t>(beam_falling_timestamp/1e9); // Convert nanoseconds to seconds
-    fprintf(stdout,"Beam FALLING signal timestamp: %lu [us], %s\n", (unsigned long)(beam_falling_timestamp/1e3), ctime(&time));
+/* Function to handle RISING edge beam STOP trigger */
+void beam_line_stop_trigger() {
+    time_t time = static_cast<time_t>(beam_stop_timestamp/1e9); // Convert nanoseconds to seconds
+    fprintf(stdout,"Beam STOP signal timestamp: %lu [us], %s\n", (unsigned long)(beam_stop_timestamp/1e3), ctime(&time));
 
     // Write trigger timestamp to events file
-    beam_fall_event_to_file(
+    beam_stop_event_to_file(
         events_file,
-        beam_falling_timestamp
+        beam_stop_timestamp
     );
 }
 
-/* Function to handle Arduino trigger GPIO interrupt */
+/* Function to handle RISING edge Arduino trigger */
 void arduino_trigger() {
     time_t time = static_cast<time_t>(arduino_timestamp/1e9); // Convert nanoseconds to seconds
     fprintf(stdout,"Arduino signal timestamp: %lu [us], %s\n", (unsigned long)(arduino_timestamp/1e3), ctime(&time));
@@ -463,10 +462,10 @@ void arduino_trigger() {
 
 // Signal handler for Ctrl+C
 void signal_handler(int signum) {
-    if (wait_trigger)
+    if (wait_beam_start)
     {
-        fprintf(stdout,"\nUser pressed Ctrl+C. Stopping wait for beam line trigger if waiting...\n");
-        wait_trigger = 0;
+        fprintf(stdout,"\nUser pressed Ctrl+C. Stopping wait for beam START signal...\n");
+        wait_beam_start = 0;
     }
     else
     {
@@ -511,7 +510,7 @@ void atexit_handler() {
             file_C_name,
             // kernel_launch_start_time,
             // kernel_launch_end_time,
-            enable_trigger_signal,
+            enable_beam_signal_wait,
             enable_seu_data_logging,
             enable_sanity_check,
             seu_count_total,
@@ -630,7 +629,7 @@ int main(int argc, char **argv){
     // Check if the required number of arguments is provided
     if (argc < 11 + 1)
     {
-        fprintf(stdout,"Expected 11 arguments: Matrix start size, end size, step size, kernel start number, end number, repetitions, enable_trigger_signal, input folder, output folder, experiment number, enable_sanity_check. Some arguments are missing! Exiting...\n");
+        fprintf(stdout,"Expected 11 arguments: Matrix start size, end size, step size, kernel start number, end number, repetitions, enable_beam_signal_wait, input folder, output folder, experiment number, enable_sanity_check. Some arguments are missing! Exiting...\n");
         exit(-1);
     }
 
@@ -640,7 +639,7 @@ int main(int argc, char **argv){
     // int st_kernel = atoi(argv[4]);  
     kernel_number = atoi(argv[5]);
     repeat_kernel = atoi(argv[6]);
-    enable_trigger_signal = atoi(argv[7]);
+    enable_beam_signal_wait = atoi(argv[7]);
     folder_name = argv[8];
     sprintf(file_A_name, "%sA_%d.bin", folder_name, matrix_size);
     sprintf(file_B_name, "%sB_%d.bin", folder_name, matrix_size);
@@ -649,9 +648,9 @@ int main(int argc, char **argv){
     experiment_name = argv[10];
     enable_sanity_check = atoi(argv[11]);
 
-    if (enable_trigger_signal and getuid() != 0)
+    if (enable_beam_signal_wait and getuid() != 0)
     {
-        fprintf(stdout,"Trigger signal reception is enabled, but the program is not running with root privileges. Please run as root or disable trigger signal reception. Exiting...\n");
+        fprintf(stdout,"Beam signal reception is enabled, but the program is not running with root privileges. Please run as root or disable beam signal reception. Exiting...\n");
         exit(-1);
     }
 
@@ -869,41 +868,41 @@ int main(int argc, char **argv){
         exit(1);
     }
 
-    // Set up GPIO pin for RISING trigger signal from beam line
-    fprintf(stdout, "GPIO pin %d setup for RISING trigger...\n", beam_rising_gpio);
-    stat = gpioSetMode(beam_rising_gpio, JET_INPUT); // Set GPIO pin as input
+    // Set up GPIO pin for beam START trigger
+    fprintf(stdout, "GPIO pin %d setup for beam START trigger...\n", beam_start_gpio);
+    stat = gpioSetMode(beam_start_gpio, JET_INPUT); // Set GPIO pin as input
     if (stat < 0)
     {
-        fprintf(stdout,"Failed to set pin mode for RISING trigger GPIO %d. Error code: %d\n", beam_rising_gpio, stat);
+        fprintf(stdout,"Failed to set pin mode for beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
         exit(1);
     }
-    // Set up interrupt handler for RISING edge on the trigger GPIO pin
-    fprintf(stdout, "Interrupt handler setup for RISING trigger...\n");
-    stat = gpioSetISRFunc(beam_rising_gpio, RISING_EDGE, 10 /* us */, &beam_rising_timestamp, &beam_line_rising_trigger);
+    // Set up interrupt handler for RISING edge on the beam START trigger GPIO pin
+    fprintf(stdout, "Interrupt handler setup for RISING edge beam START trigger...\n");
+    stat = gpioSetISRFunc(beam_start_gpio, RISING_EDGE, 10 /* us */, &beam_start_timestamp, &beam_line_start_trigger);
     if (stat < 0)
     {
-        fprintf(stdout,"Failed to set alert function for RISING trigger GPIO %d. Error code: %d\n", beam_rising_gpio, stat);
+        fprintf(stdout,"Failed to set alert function for RISING edge beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
         exit(1);
     }
-    fprintf(stdout,"GPIO pin %d set up for RISING trigger signal from beam line.\n", beam_rising_gpio);
+    fprintf(stdout,"GPIO pin %d set up for RISING edge beam START trigger.\n", beam_start_gpio);
 
-    // Set up GPIO pin for FALLING trigger signal from beam line
-    fprintf(stdout, "GPIO pin %d setup for FALLING trigger...\n", beam_falling_gpio);
-    stat = gpioSetMode(beam_falling_gpio, JET_INPUT); // Set GPIO pin as input
+    // Set up GPIO pin for beam STOP trigger
+    fprintf(stdout, "GPIO pin %d setup for STOP trigger...\n", beam_stop_gpio);
+    stat = gpioSetMode(beam_stop_gpio, JET_INPUT); // Set GPIO pin as input
     if (stat < 0)
     {
-        fprintf(stdout,"Failed to set pin mode for FALLING trigger GPIO %d. Error code: %d\n", beam_falling_gpio, stat);
+        fprintf(stdout,"Failed to set pin mode for beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
         exit(1);
     }
-    // Set up interrupt handler for FALLING edge on the trigger GPIO pin
-    fprintf(stdout, "Interrupt handler setup for FALLING trigger...\n");
-    stat = gpioSetISRFunc(beam_falling_gpio, FALLING_EDGE, 10 /* us */, &beam_falling_timestamp, &beam_line_falling_trigger);
+    // Set up interrupt handler for RISING edge on the beam STOP trigger GPIO pin
+    fprintf(stdout, "Interrupt handler setup for RISING edge beam STOP trigger...\n");
+    stat = gpioSetISRFunc(beam_stop_gpio, RISING_EDGE, 10 /* us */, &beam_stop_timestamp, &beam_line_stop_trigger);
     if (stat < 0)
     {
-        fprintf(stdout,"Failed to set alert function for FALLING trigger GPIO %d. Error code: %d\n", beam_falling_gpio, stat);
+        fprintf(stdout,"Failed to set alert function for RISING edge beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
         exit(1);
     }
-    fprintf(stdout,"GPIO pin %d set up for FALLING trigger signal from beam line.\n", beam_falling_gpio);
+    fprintf(stdout,"GPIO pin %d set up for RISING edge beam STOP trigger.\n", beam_stop_gpio);
 
     // Set up GPIO pin for Arduino signal from beam line
     fprintf(stdout, "GPIO pin %d setup for Arduino signal...\n", arduino_gpio);
@@ -913,7 +912,7 @@ int main(int argc, char **argv){
         fprintf(stdout,"Failed to set pin mode for Arduino GPIO %d. Error code: %d\n", arduino_gpio, stat);
         exit(1);
     }
-    // Set up interrupt handler for Arduino RISING trigger GPIO pin
+    // Set up interrupt handler for RISING edge Arduino trigger GPIO pin
     fprintf(stdout, "Interrupt handler setup for Arduino signal...\n");
     stat = gpioSetISRFunc(arduino_gpio, RISING_EDGE, 10 /* us */, &arduino_timestamp, &arduino_trigger);
     if (stat < 0)
@@ -923,19 +922,19 @@ int main(int argc, char **argv){
     }
     fprintf(stdout,"GPIO pin %d set up for Arduino RISING trigger signal from beam line.\n", arduino_gpio);
 
-    // Wait for beam trigger if enabled
-    if (enable_trigger_signal)
+    // Wait for beam START if enabled
+    if (enable_beam_signal_wait)
     {
-        wait_trigger = 1; // Enable waiting for trigger
-        fprintf(stdout,"Waiting for trigger signal from beam line...\n");
-        while (wait_trigger) {
+        wait_beam_start = 1; // Enable waiting for trigger
+        fprintf(stdout,"Waiting for beam START signal from beam line...\n");
+        while (wait_beam_start) {
             // Wait for the GPIO pin to go high
         }
-        fprintf(stdout,"Trigger received!\n");
+        fprintf(stdout,"Beam START received!\n");
     }
     else
     {
-        fprintf(stdout,"Waiting for trigger signal reception is DISABLED. Starting kernel execution immediately...\n");
+        fprintf(stdout,"Waiting for beam START signal reception is DISABLED. Starting kernel execution immediately...\n");
     }
 
     // Print kernel start timestamp
