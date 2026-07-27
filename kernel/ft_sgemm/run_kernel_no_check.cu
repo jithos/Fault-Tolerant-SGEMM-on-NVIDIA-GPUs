@@ -1231,7 +1231,7 @@ int main(int argc, char **argv){
                     // if (active_streams[i] == 7) mem_access_error = M * N * sizeof(float) * repeat_kernel; // -> illegal memory access error
                     // if (active_streams[i] == 2) cudaMalloc((void**)&dC[i], -1); // -> device out of memory and subsequent illegal memory access error
                     // TODO: Remove after DEBUGGING - END
-                    ft_sgemm_medium<<<gridDim, blockDim, 0, kernel_stream[i]>>>(M, N, K, dA, dB, dC[i]+mem_access_error, alpha, beta);
+                    ft_sgemm_medium<<<gridDim, blockDim, 0, kernel_stream[i]>>>(M, N, K, dA, dB, dC[i+mem_access_error], alpha, beta);
                 }
                 else
                 {
