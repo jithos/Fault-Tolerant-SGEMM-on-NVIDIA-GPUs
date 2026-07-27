@@ -2,45 +2,7 @@ import os
 import subprocess
 import sys
 
-# Script settings
-WORKSPACE_FOLDER = "/home/jithin/repos/Fault-Tolerant-SGEMM-on-NVIDIA-GPUs/"
-
-BEAM_DATA_FOLDER = f"{WORKSPACE_FOLDER}beam_data/"
-EXPERIMENT_INPUT_FOLDER = f"{BEAM_DATA_FOLDER}exp_input_matrices/"
-EXPERIMENT_RESULTS_FOLDER = f"{BEAM_DATA_FOLDER}exp_results/"
-
-PROFILING_RESULTS_FOLDER = f"{WORKSPACE_FOLDER}profiling_results/"
-NSYS_RESULTS_FOLDER = f"{PROFILING_RESULTS_FOLDER}nsys_exp_results/"
-NCU_RESULTS_FOLDER = f"{PROFILING_RESULTS_FOLDER}ncu_exp_results/"
-
-# Kernel settings
-MATRIX_SIZE = 256
-KERNEL_NUMBER = 12
-KERNEL_REPETITIONS = -1
-KERNEL_ENABLE_BEAM_SIGNAL_WAIT = False
-KERNEL_ENABLE_SANITY_CHECK = False
-KERNEL_ENABLE_SEU_DATA_LOGGING = False
-KERNEL_INPUT_FOLDER = EXPERIMENT_INPUT_FOLDER
-KERNEL_OUTPUT_FOLDER = EXPERIMENT_RESULTS_FOLDER
-EXPERIMENT_NAME = "Y"
-KERNEL_FOLDER = f"{WORKSPACE_FOLDER}build/"
-KERNEL_COMMAND = "run_kernel_seu_data" if KERNEL_ENABLE_SEU_DATA_LOGGING else "run_kernel_seu_count"
-
-KERNEL_LIST = {
-    1: "sgemm_small",
-    2: "sgemm_medium",
-    3: "sgemm_large",
-    4: "sgemm_tall",
-    5: "sgemm_wide",
-    6: "sgemm_huge",
-    11: "ft_sgemm_small",
-    12: "ft_sgemm_medium",
-    13: "ft_sgemm_large",
-    14: "ft_sgemm_tall",
-    15: "ft_sgemm_wide",
-    16: "ft_sgemm_huge",
-    17: "ft_sgemm_medium_96",
-}
+import kernel_settings as ks
 
 if __name__ == "__main__":
 
@@ -71,40 +33,24 @@ if __name__ == "__main__":
             print("Invalid option. Use 'help' for usage information.")
             sys.exit(1)
 
-    # Construct the command to run the kernel
-    command = [
-        KERNEL_FOLDER + KERNEL_COMMAND,
-        str(MATRIX_SIZE),
-        str(MATRIX_SIZE),
-        str(MATRIX_SIZE),
-        str(KERNEL_NUMBER),
-        str(KERNEL_NUMBER),
-        str(KERNEL_REPETITIONS),
-        str(int(KERNEL_ENABLE_BEAM_SIGNAL_WAIT)),
-        KERNEL_INPUT_FOLDER,
-        KERNEL_OUTPUT_FOLDER,
-        EXPERIMENT_NAME,
-        str(int(KERNEL_ENABLE_SANITY_CHECK)),
-    ]
-
-    # Add profiling tools if specified
+    # Prepare executable command with profiling tools if specified
     if run_ncu:
-        command = ["sudo", "-E", "/opt/nvidia/nsight-compute/2024.3.1/target/linux-v4l_l4t-t210-a64/ncu", "--config-file", "off", "--export", f"{NCU_RESULTS_FOLDER}ncu_exp_{EXPERIMENT_NAME}_{KERNEL_LIST[KERNEL_NUMBER]}", "--force-overwrite", "--kernel-name", f"{KERNEL_LIST[KERNEL_NUMBER]}"] + command
+        command = ["sudo", "-E", "/opt/nvidia/nsight-compute/2024.3.1/target/linux-v4l_l4t-t210-a64/ncu", "--config-file", "off", "--export", f"{ks.NCU_RESULTS_FOLDER}ncu_exp_{ks.EXPERIMENT_NAME}_{ks.KERNEL_LIST[ks.KERNEL_NUMBER]}", "--force-overwrite", "--kernel-name", f"{ks.KERNEL_LIST[ks.KERNEL_NUMBER]}"] + ks.KERNEL_COMMAND
         print("NCU profiling enabled")
     elif run_nsys:
-        command = ["sudo", "-E", "nsys", "profile", "--stats=true", "--output", f"{NSYS_RESULTS_FOLDER}nsys_exp_{EXPERIMENT_NAME}_{KERNEL_LIST[KERNEL_NUMBER]}", "--force-overwrite", "true"] + command
+        command = ["sudo", "-E", "nsys", "profile", "--stats=true", "--output", f"{ks.NSYS_RESULTS_FOLDER}nsys_exp_{ks.EXPERIMENT_NAME}_{ks.KERNEL_LIST[ks.KERNEL_NUMBER]}", "--force-overwrite", "true"] + ks.KERNEL_COMMAND
         print("NSYS profiling enabled")
     # elif print_ncu:
     #     command = ["ncu", "-i", ncu_report_file]
     #     print("Printing NCU report")
     else:
-        command = ["sudo", "-E"] + command
+        command = ["sudo", "-E"] + ks.KERNEL_COMMAND
 
     # Make sure the build directory is up to date
     make_command = ["make", "-j"]
     print("----------------------------------------------------------------")
     print("Executing command: ", " ".join(make_command))
-    make_process = subprocess.run(make_command, cwd=f"{WORKSPACE_FOLDER}/build")
+    make_process = subprocess.run(make_command, cwd=f"{ks.WORKSPACE_FOLDER}/build")
     if make_process.returncode != 0:
         print("Error: Make command failed with return code", make_process.returncode)
         print("----------------------------------------------------------------")
@@ -121,5 +67,5 @@ if __name__ == "__main__":
         print("----------------------------------------------------------------")
         sys.exit(1)
     if run_ncu:
-        subprocess.run(["ncu", "-i", f"{NCU_RESULTS_FOLDER}ncu_exp_{EXPERIMENT_NAME}_{KERNEL_LIST[KERNEL_NUMBER]}.ncu-rep"])
+        subprocess.run(["ncu", "-i", f"{ks.NCU_RESULTS_FOLDER}ncu_exp_{ks.EXPERIMENT_NAME}_{ks.KERNEL_LIST[ks.KERNEL_NUMBER]}.ncu-rep"])
     print("----------------------------------------------------------------")
