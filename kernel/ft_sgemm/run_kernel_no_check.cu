@@ -1161,7 +1161,7 @@ int main(int argc, char **argv){
                 // if (seu_count > 0) {
                 //     fprintf(stdout, "c: %d, r: %d, v: %e\n", error_col_idx[0], error_row_idx[0], error_value[0]);
                 // }
-                fprintf(stdout, "\n");
+                fprintf(stdout, "\r\n");
 
                 // Save events to file for this repetition
                 kernel_event_to_file(
