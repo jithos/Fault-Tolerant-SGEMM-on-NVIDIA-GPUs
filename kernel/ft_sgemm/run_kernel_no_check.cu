@@ -879,15 +879,15 @@ int main(int argc, char **argv){
         fprintf(stdout,"Failed to set pin mode for beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
         exit(1);
     }
-    // Set up interrupt handler for RISING edge on the beam START trigger GPIO pin
-    fprintf(stdout, "Interrupt handler setup for RISING edge beam START trigger...\n");
-    stat = gpioSetISRFunc(beam_start_gpio, RISING_EDGE, 10 /* us */, &beam_start_timestamp, &beam_line_start_trigger);
+    // Set up interrupt handler for EITHER edge on the beam START trigger GPIO pin
+    fprintf(stdout, "Interrupt handler setup for EITHER edge beam START trigger...\n");
+    stat = gpioSetISRFunc(beam_start_gpio, EITHER_EDGE, 10 /* us */, &beam_start_timestamp, &beam_line_start_trigger);
     if (stat < 0)
     {
-        fprintf(stdout,"Failed to set alert function for RISING edge beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
+        fprintf(stdout,"Failed to set alert function for EITHER edge beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
         exit(1);
     }
-    fprintf(stdout,"GPIO pin %d set up for RISING edge beam START trigger.\n", beam_start_gpio);
+    fprintf(stdout,"GPIO pin %d set up for EITHER edge beam START trigger.\n", beam_start_gpio);
 
     // Set up GPIO pin for beam STOP trigger
     fprintf(stdout, "GPIO pin %d setup for STOP trigger...\n", beam_stop_gpio);
@@ -897,15 +897,15 @@ int main(int argc, char **argv){
         fprintf(stdout,"Failed to set pin mode for beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
         exit(1);
     }
-    // Set up interrupt handler for RISING edge on the beam STOP trigger GPIO pin
-    fprintf(stdout, "Interrupt handler setup for RISING edge beam STOP trigger...\n");
-    stat = gpioSetISRFunc(beam_stop_gpio, RISING_EDGE, 10 /* us */, &beam_stop_timestamp, &beam_line_stop_trigger);
+    // Set up interrupt handler for EITHER edge on the beam STOP trigger GPIO pin
+    fprintf(stdout, "Interrupt handler setup for EITHER edge beam STOP trigger...\n");
+    stat = gpioSetISRFunc(beam_stop_gpio, EITHER_EDGE, 10 /* us */, &beam_stop_timestamp, &beam_line_stop_trigger);
     if (stat < 0)
     {
-        fprintf(stdout,"Failed to set alert function for RISING edge beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
+        fprintf(stdout,"Failed to set alert function for EITHER edge beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
         exit(1);
     }
-    fprintf(stdout,"GPIO pin %d set up for RISING edge beam STOP trigger.\n", beam_stop_gpio);
+    fprintf(stdout,"GPIO pin %d set up for EITHER edge beam STOP trigger.\n", beam_stop_gpio);
 
     // Set up GPIO pin for Arduino signal from beam line
     fprintf(stdout, "GPIO pin %d setup for Arduino signal...\n", arduino_gpio);
