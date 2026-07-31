@@ -17,6 +17,7 @@
 #include <unistd.h>
 #include <csignal>
 #include <iomanip>
+#include <sys/wait.h>
 
 #define RESULTS_FILE "results.csv"
 #define EVENTS_FILE "events.csv"
@@ -80,10 +81,22 @@ long long int seu_count_total = 0;
 int kernel_number = 12; // 12 is used as default kernel number
 int repeat_kernel = -1; // Default of repetitions for the kernel execution
 int completed_streams = 0;
+pid_t pid;
+unsigned long spawn_count = 0;
+
+/* Gobal variables for Kernel Execution Loop */
+int M, N, K;
+float alpha = 1.0;
+float beta = 0.0;
+// SEU count variables
+int* error_row_idx;
+int* error_col_idx;
+float* error_value;
 
 /* Global variables for CUDA events */
 float sanity_time_ms = 0.0f;
 float* kernel_time_ms = NULL;
+uint64_t gpu_reset_timestamp = 0; // Track timestamp of any GPU reset
 
 /* ------------------------ */
 /* File Operation Functions */
@@ -478,31 +491,94 @@ void signal_handler(int signum) {
 }
 
 void atexit_handler() {
-    fprintf(stdout,"\n# ---------------------------------------------- #\n");
-    fprintf(stdout,"# --- Exit application and cleanup resources --- #\n");
-    fprintf(stdout,"# ---------------------------------------------- #\n\n");
+    if (pid == 0)
+    {
+        fprintf(stdout,"\n# -------------------------------------------------- #\n");
+        fprintf(stdout,"# --- KERNEL EXECUTION LOOP %d ended. --- #\n", spawn_count);
+        fprintf(stdout,"# -------------------------------------------------- #\n\n");
+    }
+    else
+    {
+        fprintf(stdout,"\n# ---------------------------------------------- #\n");
+        fprintf(stdout,"# --- Exit application and cleanup resources --- #\n");
+        fprintf(stdout,"# ---------------------------------------------- #\n\n");
 
+        // Release peripherals
+        fprintf(stdout, "Release GPIO.\n");
+        gpioTerminate();
+
+        // Free up memories
+        fprintf(stdout, "Release host memory.\n");
+        free(A);
+        free(B);
+        free(C);
+        free(C_ref);
+        free(check_C_col);
+        free(check_C_row);
+
+        // Flush and close files
+        fprintf(stdout, "Close files.\n");
+        if (results_file != NULL){
+            results_file->flush();
+            results_file->close();
+            // fprintf(stdout,"Saved results to %s\n", results_file_path.c_str());
+        }
+        if (events_file != NULL) {
+            events_file->flush();
+            events_file->close();
+            // fprintf(stdout,"Saved events to %s\n", events_file_path.c_str());
+        }
+        #ifdef ENABLE_SEU_DATA_LOGGING
+        if (seu_data_file != NULL) {
+            seu_data_file->flush();
+            seu_data_file->close();
+            // fprintf(stdout,"Saved SEU data to %s\n", seu_data_file_path.c_str());
+        }
+        #endif
+
+        // reset CUDA device to cleanup
+        fprintf(stdout, "Reset GPU.\n");
+        cudaDeviceReset();
+
+        uint64_t exit_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        time_convert = static_cast<time_t>(exit_time/1e6); // Convert microseconds to seconds
+        fprintf(stdout,"\nProgram exit timestamp: %lu [us], %s", exit_time, ctime(&time_convert));
+        fprintf(stdout, "\n--------------------------------------------------------------------------\n");
+    }
+}
+
+/* ---------------- */
+/* Logger Functions */
+/* ---------------- */
+
+// void logger_info(char* message)
+// {
+//     // Redirect stdout and stderr to files
+//     fprintf(stdout,"%s", message);
+//     fprintf(STDOUT_FILE, "%s", message);
+// }
+
+// void logger_err(char* message)
+// {
+//     fprintf(stderr,"%s", message);
+//     fprintf(STDERR_FILE, "%s", message);
+// }
+
+/* ------------------------------------- */
+/* --- Cleanup KERNEL EXECUTION LOOP --- */
+/* ------------------------------------- */
+void cleanup_kernel_execution_loop()
+{
     // Print summary
     fprintf(stdout, "Completed streams: %d, Total SEU count: %lld\n", completed_streams, seu_count_total);
 
     // Timestamp end of application
     app_end_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     time_convert = static_cast<time_t>(app_end_timestamp/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"\nProgram end timestamp: %lu [us], %s", app_end_timestamp, ctime(&time_convert));
-    fprintf(stdout,"Program duration: %lu [us]\n", app_end_timestamp - app_start_timestamp);
+    fprintf(stdout,"\nKernel execution loop end timestamp: %lu [us], %s", app_end_timestamp, ctime(&time_convert));
+    fprintf(stdout,"nKernel execution loop duration: %lu [us]\n", app_end_timestamp - app_start_timestamp);
 
-    // Release pheripherals
-    gpioTerminate();
-
-    // Free up memories
-    free(A);
-    free(B);
-    free(C);
-    free(C_ref);
-    free(check_C_col);
-    free(check_C_row);
-
-    // Flush and close files
+    // Flush files
     if (results_file != NULL){
         // Write results to results file before exiting
         write_results_to_file(
@@ -523,7 +599,6 @@ void atexit_handler() {
         );
 
         results_file->flush();
-        results_file->close();
         fprintf(stdout,"Saved results to %s\n", results_file_path.c_str());
     }
     if (events_file != NULL) {
@@ -537,178 +612,39 @@ void atexit_handler() {
             false // repetition_cancelled
         );
         events_file->flush();
-        events_file->close();
         fprintf(stdout,"Saved events to %s\n", events_file_path.c_str());
     }
     #ifdef ENABLE_SEU_DATA_LOGGING
     if (seu_data_file != NULL) {
         seu_data_file->flush();
-        seu_data_file->close();
         fprintf(stdout,"Saved SEU data to %s\n", seu_data_file_path.c_str());
     }
     #endif
 
     // reset CUDA device to cleanup
+    fprintf(stdout, "Reset GPU.\n");
     cudaDeviceReset();
-
-    uint64_t exit_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    time_convert = static_cast<time_t>(exit_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"\nProgram exit timestamp: %lu [us], %s", exit_time, ctime(&time_convert));
-    fprintf(stdout, "\n--------------------------------------------------------------------------\n");
-
-    exit(0);
 }
 
-/* ---------------- */
-/* Logger Functions */
-/* ---------------- */
-
-// void logger_info(char* message)
-// {
-//     // Redirect stdout and stderr to files
-//     fprintf(stdout,"%s", message);
-//     fprintf(STDOUT_FILE, "%s", message);
-// }
-
-// void logger_err(char* message)
-// {
-//     fprintf(stderr,"%s", message);
-//     fprintf(STDERR_FILE, "%s", message);
-// }
-
-/* ------------- */
-/* Main Function */
-/* ------------- */
-
-int main(int argc, char **argv){
-    fprintf(stdout, "\n--------------------------------------------------------------------------\n");
-    // Print start timestamp
-    app_start_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    time_convert = static_cast<time_t>(app_start_timestamp/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"Program start timestamp: %lu [us], %s", app_start_timestamp, ctime(&time_convert));
-
-    /* ------------------------------ */
-    /* Setup signal and exit handlers */
-    /* ------------------------------ */
-    fprintf(stdout,"\n# ------------------------------------------- #\n");
-    fprintf(stdout,"# --- Setting up signal and exit handlers --- #\n");
-    fprintf(stdout,"# ------------------------------------------- #\n\n");
-
-    // Register atexit handler to ensure it gets called on normal exit
-    const int result = std::atexit(atexit_handler); // Handler will be called
-
-    // Register signal handler for Ctrl+C (SIGINT)
-    std::signal(SIGINT, signal_handler);
-  
-    if (result != 0)
-    {
-        std::cerr << "atexit registration failed\n";
-        return EXIT_FAILURE;
-    }
-
-    /* ---------------------- */
-    /* Process compiler flags */
-    /* ---------------------- */
-
-    // Inform user if ABFT error correction is disabled
-    #ifdef DISABLE_ERROR_CORRECTION
-    fprintf(stdout,"\n----------------------------------------\n");
-    fprintf(stdout,"!! ABFT error correction is DISABLED !!");
-    fprintf(stdout,"\n----------------------------------------\n\n");
-    #endif
-
-    // Check compiler flags
-    #ifdef ENABLE_SEU_DATA_LOGGING
-    enable_seu_data_logging = true;
-    #endif
-
-    /* -------------------------- */
-    /* Get command line arguments */
-    /* -------------------------- */
-    fprintf(stdout,"\n# -------------------------------------- #\n");
-    fprintf(stdout,"# --- Parsing command line arguments --- #\n");
-    fprintf(stdout,"# -------------------------------------- #\n\n");
-
-    // Check if the required number of arguments is provided
-    if (argc < 11 + 1)
-    {
-        fprintf(stdout,"Expected 11 arguments: Matrix start size, end size, step size, kernel start number, end number, repetitions, enable_beam_signal_wait, input folder, output folder, experiment number, enable_sanity_check. Some arguments are missing! Exiting...\n");
-        exit(-1);
-    }
-
-    // int start_size = atoi(argv[1]);        
-    matrix_size =  atoi(argv[2]);
-    // int gap_size =  atoi(argv[3]);        
-    // int st_kernel = atoi(argv[4]);  
-    kernel_number = atoi(argv[5]);
-    repeat_kernel = atoi(argv[6]);
-    enable_beam_signal_wait = atoi(argv[7]);
-    folder_name = argv[8];
-    sprintf(file_A_name, "%sA_%d.bin", folder_name, matrix_size);
-    sprintf(file_B_name, "%sB_%d.bin", folder_name, matrix_size);
-    sprintf(file_C_name, "%sC_%d.bin", folder_name, matrix_size);
-    output_folder = argv[9];
-    experiment_name = argv[10];
-    enable_sanity_check = atoi(argv[11]);
-
-    if (enable_beam_signal_wait and getuid() != 0)
-    {
-        fprintf(stdout,"Beam signal reception is enabled, but the program is not running with root privileges. Please run as root or disable beam signal reception. Exiting...\n");
-        exit(-1);
-    }
+/* ----------------------------- */
+/* --- KERNEL EXECUTION LOOP --- */
+/* ----------------------------- */
+void kernel_execution_loop(){
+    /* ---------------------------- */
+    /* --- Initialize variables --- */
+    /* ---------------------------- */
+    // TODO: Reset variables for each kernel execution loop iteration
 
     /* ----------------------------------- */
-    /* Initialize kernel inputs and memory */
+    /* --- Allocate CUDA device memory --- */
     /* ----------------------------------- */
-    fprintf(stdout,"\n# --------------------------------------------- #\n");
-    fprintf(stdout,"# --- Initializing kernel inputs and memory --- #\n");
-    fprintf(stdout,"# --------------------------------------------- #\n\n");
+    fprintf(stdout,"\n# ----------------------------------- #\n");
+    fprintf(stdout,"# --- Allocate CUDA device memory --- #\n");
+    fprintf(stdout,"# ----------------------------------- #\n\n");
 
-    srand(10);
-    float alpha = 1.0;
-    float beta = 0.0;       
-    int M, N, K;    
-    M = matrix_size; N = matrix_size;  K = matrix_size;
     int deviceId;          
     cudaGetDevice(&deviceId);            
     cudaDeviceProp props = getDetails(deviceId);
-
-    // SEU count variables
-    int error_row_idx[M * N];
-    int error_col_idx[M * N];
-    float error_value[M * N];
-
-    printf("Allocating host memory...\n");
-    A = (float *)calloc(M * N, sizeof(float));
-    B = (float *)calloc(M * K, sizeof(float));
-    // C = (float *)calloc(M * N * repeat_kernel, sizeof(float));
-    C_ref = (float *)calloc(M * N, sizeof(float));
-    check_C_col = (float *)calloc(N, sizeof(float));
-    check_C_row = (float *)calloc(M, sizeof(float));
-
-    // Allocate host memory for output matrices for each repetition
-    C = (float **)malloc(sizeof(float *) * MAX_CONCURRENT_KERNELS);
-    for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
-        C[i] = (float *)calloc(M * N, sizeof(float));
-    }
-
-    // Initialize arrays with random values (or read from file)
-    // -- Generarte random matrices (Very slow !! Read from file instead !!)
-    // Use the generate matrix utility -> see generate_matrices.cu
-
-    // -- Read input matrices from file
-    printf("Reading input matrices from input files...\n");
-    read_matrix_from_file(file_A_name, A, matrix_size);
-    read_matrix_from_file(file_B_name, B, matrix_size);
-    read_matrix_from_file(file_C_name, C_ref, matrix_size);
-
-    // Inject many error to reference matrix
-    // for (int i = 0; i < M * N; i++)
-    // {
-    //     C_ref[i] *= 0.1;
-    // }
-
-    printf("Allocating device memory...\n");
     CUDA_CALLER(cudaMalloc((void**) &dA, sizeof(float) * M * N));
     CUDA_CALLER(cudaMalloc((void**) &dB, sizeof(float) * M * K));  
     // CUDA_CALLER(cudaMalloc((void**) &dC, sizeof(float) * M * N * repeat_kernel));
@@ -720,53 +656,6 @@ int main(int argc, char **argv){
     for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
         cudaMalloc((void**) &(dC[i]), sizeof(float) * M * N);
     }
-
-    /* -------------------- */
-    /* Prepare output files */
-    /* -------------------- */
-    fprintf(stdout,"\n# ------------------------------ #\n");
-    fprintf(stdout,"# --- Preparing output files --- #\n");
-    fprintf(stdout,"# ------------------------------ #\n\n");
-
-    // Prepare file names and paths
-    std::tm* f_ts = std::localtime(&time_convert);
-    std::ostringstream ss;
-    ss << std::put_time(f_ts, "%Y-%m-%d_%a_%H:%M:%S");
-    file_timestamp = ss.str();
-    results_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(RESULTS_FILE);
-    events_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(EVENTS_FILE);
-    seu_data_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(SEU_DATA_FILE);
-
-    // Open results file for writing
-    results_file = new std::fstream(results_file_path, std::ios::out | std::ios::binary | std::ios::app);
-    if (!results_file->is_open()) {
-        fprintf(stderr, "Error opening results file for writing: %s\n", results_file_path.c_str());
-        results_file->close();
-        exit(EXIT_FAILURE);
-    }
-
-    // Open events file for writing
-    events_file = new std::fstream(events_file_path, std::ios::out | std::ios::binary | std::ios::app);
-    if (!events_file->is_open()) {
-        fprintf(stderr, "Error opening events file for writing: %s\n", events_file_path.c_str());
-        events_file->close();
-        exit(EXIT_FAILURE);
-    }
-
-    // Open SEU data file for writing
-    #ifdef ENABLE_SEU_DATA_LOGGING
-    seu_data_file = new std::fstream(seu_data_file_path, std::ios::out | std::ios::binary | std::ios::app);
-    if (!seu_data_file->is_open()) {
-        fprintf(stderr, "Error opening SEU data file for writing: %s\n", seu_data_file_path.c_str());
-        seu_data_file->close();
-        exit(EXIT_FAILURE);
-    }
-    #endif
-
-    // Write headers to output files
-    printf("Writing header to output files...\n");
-    write_header_to_results_file(results_file);
-    write_header_to_events_file(events_file);
 
     /* ------------------------------ */
     /* Preapre cuda handle for CUBLAS */
@@ -852,79 +741,9 @@ int main(int argc, char **argv){
         fprintf(stdout,"Sanity check completed. SEUs prior to beam detected: %lld\n", seu_count);
     }
 
-    /* ----------------------------------------------- */
-    /* Setup trigger signal from beam line and Arduino */
-    /* ----------------------------------------------- */
-    fprintf(stdout,"\n# ---------------------------------------------- #\n");
-    fprintf(stdout,"# --- Setup beam and Arduino trigger signals --- #\n");
-    fprintf(stdout,"# ---------------------------------------------- #\n\n");
-
-    // Prepare variables for GPIO setup
-    int Init;
-    int stat;
-
-    // Intitalize Orin GPIO library
-    fprintf(stdout, "GPIO library initialization...\n");
-    Init = gpioInitialise();
-    if (Init < 0) {
-        fprintf(stdout,"Jetgpio initialisation failed. Error code:  %d\n", Init);
-        exit(1);
-    }
-
-    // Set up GPIO pin for beam START trigger
-    fprintf(stdout, "GPIO pin %d setup for beam START trigger...\n", beam_start_gpio);
-    stat = gpioSetMode(beam_start_gpio, JET_INPUT); // Set GPIO pin as input
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set pin mode for beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
-        exit(1);
-    }
-    // Set up interrupt handler for EITHER edge on the beam START trigger GPIO pin
-    fprintf(stdout, "Interrupt handler setup for EITHER edge beam START trigger...\n");
-    stat = gpioSetISRFunc(beam_start_gpio, EITHER_EDGE, 10 /* us */, &beam_start_timestamp, &beam_line_start_trigger);
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set alert function for EITHER edge beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
-        exit(1);
-    }
-    fprintf(stdout,"GPIO pin %d set up for EITHER edge beam START trigger.\n", beam_start_gpio);
-
-    // Set up GPIO pin for beam STOP trigger
-    fprintf(stdout, "GPIO pin %d setup for STOP trigger...\n", beam_stop_gpio);
-    stat = gpioSetMode(beam_stop_gpio, JET_INPUT); // Set GPIO pin as input
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set pin mode for beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
-        exit(1);
-    }
-    // Set up interrupt handler for EITHER edge on the beam STOP trigger GPIO pin
-    fprintf(stdout, "Interrupt handler setup for EITHER edge beam STOP trigger...\n");
-    stat = gpioSetISRFunc(beam_stop_gpio, EITHER_EDGE, 10 /* us */, &beam_stop_timestamp, &beam_line_stop_trigger);
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set alert function for EITHER edge beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
-        exit(1);
-    }
-    fprintf(stdout,"GPIO pin %d set up for EITHER edge beam STOP trigger.\n", beam_stop_gpio);
-
-    // Set up GPIO pin for Arduino signal from beam line
-    fprintf(stdout, "GPIO pin %d setup for Arduino signal...\n", arduino_gpio);
-    stat = gpioSetMode(arduino_gpio, JET_INPUT); // Set GPIO pin as input
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set pin mode for Arduino GPIO %d. Error code: %d\n", arduino_gpio, stat);
-        exit(1);
-    }
-    // Set up interrupt handler for RISING edge Arduino trigger GPIO pin
-    fprintf(stdout, "Interrupt handler setup for Arduino signal...\n");
-    stat = gpioSetISRFunc(arduino_gpio, RISING_EDGE, 10 /* us */, &arduino_timestamp, &arduino_trigger);
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set alert function for Arduino RISING trigger GPIO %d. Error code: %d\n", arduino_gpio, stat);
-        exit(1);
-    }
-    fprintf(stdout,"GPIO pin %d set up for Arduino RISING trigger signal from beam line.\n", arduino_gpio);
-
+    /* --------------------------- */
+    /* --- Wait for beam START --- */
+    /* --------------------------- */
     // Wait for beam START if enabled
     if (enable_beam_signal_wait)
     {
@@ -940,17 +759,17 @@ int main(int argc, char **argv){
         fprintf(stdout,"Waiting for beam START signal reception is DISABLED. Starting kernel execution immediately...\n");
     }
 
-    // Print kernel start timestamp
-    kernel_launch_start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-    time_convert = static_cast<time_t>(kernel_launch_start_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"Kernel launch start timestamp: %lu [us], %s", kernel_launch_start_time, ctime(&time_convert));
-
     /* -------------------- */
     /* Run selected kernels */
     /* -------------------- */
     fprintf(stdout,"\n# --------------------------------- #\n");
     fprintf(stdout,"# --- Starting kernel execution --- #\n");
     fprintf(stdout,"# --------------------------------- #\n\n");
+
+    // Print kernel start timestamp
+    kernel_launch_start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    time_convert = static_cast<time_t>(kernel_launch_start_time/1e6); // Convert microseconds to seconds
+    fprintf(stdout,"Kernel launch start timestamp: %lu [us], %s", kernel_launch_start_time, ctime(&time_convert));
 
     fprintf(stdout,"Matrix size: %d, Kernel number: %d, Repetitions: %d\n", matrix_size, kernel_number, repeat_kernel);
 
@@ -1220,11 +1039,12 @@ int main(int argc, char **argv){
             }
 
             // Reset the device to recover from the error
+            save_timestamp(&gpu_reset_timestamp);
             cudaDeviceReset();
-            fprintf(stdout,"WARNING: CUDA device was reset. Exiting application.\n");
+            fprintf(stdout,"WARNING: CUDA device was reset at %lu\n", gpu_reset_timestamp);
 
             // Exit application
-            exit(-1);
+            return;
         }
 
         /* ----------------------------------------------------------------- */
@@ -1266,7 +1086,7 @@ int main(int argc, char **argv){
                 else
                 {
                     fprintf(stdout,"ERROR: Kernel number %d is not implemented. Exiting application.\n", kernel_number);
-                    exit(-1);
+                    return;
                 }
                 cudaEventRecord(kernel_stop[i], kernel_stream[i]);
 
@@ -1312,6 +1132,283 @@ int main(int argc, char **argv){
 
     // Print total SEU errors across all repetitions
     fprintf(stdout,"Total SEU errors across all repetitions: %lld\n", seu_count_total);
+}
+
+/* ------------- */
+/* Main Function */
+/* ------------- */
+
+int main(int argc, char **argv){
+    fprintf(stdout, "\n--------------------------------------------------------------------------\n");
+    // Print start timestamp
+    app_start_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    time_convert = static_cast<time_t>(app_start_timestamp/1e6); // Convert microseconds to seconds
+    fprintf(stdout,"Program start timestamp: %lu [us], %s", app_start_timestamp, ctime(&time_convert));
+
+    /* ------------------------------ */
+    /* Setup signal and exit handlers */
+    /* ------------------------------ */
+    fprintf(stdout,"\n# ------------------------------------------- #\n");
+    fprintf(stdout,"# --- Setting up signal and exit handlers --- #\n");
+    fprintf(stdout,"# ------------------------------------------- #\n\n");
+
+    // Register atexit handler to ensure it gets called on normal exit
+    const int result = std::atexit(atexit_handler); // Handler will be called
+
+    // Register signal handler for Ctrl+C (SIGINT)
+    std::signal(SIGINT, signal_handler);
+
+    if (result != 0)
+    {
+        std::cerr << "atexit registration failed\n";
+        return EXIT_FAILURE;
+    }
+
+    /* ---------------------- */
+    /* Process compiler flags */
+    /* ---------------------- */
+
+    // Inform user if ABFT error correction is disabled
+    #ifdef DISABLE_ERROR_CORRECTION
+    fprintf(stdout,"\n----------------------------------------\n");
+    fprintf(stdout,"!! ABFT error correction is DISABLED !!");
+    fprintf(stdout,"\n----------------------------------------\n\n");
+    #endif
+
+    // Check compiler flags
+    #ifdef ENABLE_SEU_DATA_LOGGING
+    enable_seu_data_logging = true;
+    #endif
+
+    /* -------------------------- */
+    /* Get command line arguments */
+    /* -------------------------- */
+    fprintf(stdout,"\n# -------------------------------------- #\n");
+    fprintf(stdout,"# --- Parsing command line arguments --- #\n");
+    fprintf(stdout,"# -------------------------------------- #\n\n");
+
+    // Check if the required number of arguments is provided
+    if (argc < 11 + 1)
+    {
+        fprintf(stdout,"Expected 11 arguments: Matrix start size, end size, step size, kernel start number, end number, repetitions, enable_beam_signal_wait, input folder, output folder, experiment number, enable_sanity_check. Some arguments are missing! Exiting...\n");
+        exit(-1);
+    }
+
+    srand(10);
+    // int start_size = atoi(argv[1]);
+    matrix_size =  atoi(argv[2]);
+    M = matrix_size; N = matrix_size;  K = matrix_size;
+    // int gap_size =  atoi(argv[3]);
+    // int st_kernel = atoi(argv[4]);
+    kernel_number = atoi(argv[5]);
+    repeat_kernel = atoi(argv[6]);
+    enable_beam_signal_wait = atoi(argv[7]);
+    folder_name = argv[8];
+    sprintf(file_A_name, "%sA_%d.bin", folder_name, matrix_size);
+    sprintf(file_B_name, "%sB_%d.bin", folder_name, matrix_size);
+    sprintf(file_C_name, "%sC_%d.bin", folder_name, matrix_size);
+    output_folder = argv[9];
+    experiment_name = argv[10];
+    enable_sanity_check = atoi(argv[11]);
+
+    // SEU error tracking arrays
+    error_row_idx = (int *)calloc(M * N, sizeof(int));
+    error_col_idx = (int *)calloc(M * N, sizeof(int));
+    error_value = (float *)calloc(M * N, sizeof(float));
+
+    if (enable_beam_signal_wait and getuid() != 0)
+    {
+        fprintf(stdout,"Beam signal reception is enabled, but the program is not running with root privileges. Please run as root or disable beam signal reception. Exiting...\n");
+        exit(-1);
+    }
+
+    /* ----------------------------------------- */
+    /* Allocate host memory and read input files */
+    /* ----------------------------------------- */
+    fprintf(stdout,"\n# ------------------------------------------------- #\n");
+    fprintf(stdout,"# --- Allocate host memory and read input files --- #\n");
+    fprintf(stdout,"# ------------------------------------------------- #\n\n");
+
+    A = (float *)calloc(M * N, sizeof(float));
+    B = (float *)calloc(M * K, sizeof(float));
+    // C = (float *)calloc(M * N * repeat_kernel, sizeof(float));
+    C_ref = (float *)calloc(M * N, sizeof(float));
+    check_C_col = (float *)calloc(N, sizeof(float));
+    check_C_row = (float *)calloc(M, sizeof(float));
+
+    // Allocate host memory for output matrices for each repetition
+    C = (float **)malloc(sizeof(float *) * MAX_CONCURRENT_KERNELS);
+    for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
+        C[i] = (float *)calloc(M * N, sizeof(float));
+    }
+
+    // Initialize arrays with random values (or read from file)
+    // -- Generarte random matrices (Very slow !! Read from file instead !!)
+    // Use the generate matrix utility -> see generate_matrices.cu
+
+    // -- Read input matrices from file
+    printf("Reading input matrices from input files...\n");
+    read_matrix_from_file(file_A_name, A, matrix_size);
+    read_matrix_from_file(file_B_name, B, matrix_size);
+    read_matrix_from_file(file_C_name, C_ref, matrix_size);
+
+    // Inject many error to reference matrix
+    // for (int i = 0; i < M * N; i++)
+    // {
+    //     C_ref[i] *= 0.1;
+    // }
+
+    /* -------------------- */
+    /* Prepare output files */
+    /* -------------------- */
+    fprintf(stdout,"\n# ------------------------------ #\n");
+    fprintf(stdout,"# --- Preparing output files --- #\n");
+    fprintf(stdout,"# ------------------------------ #\n\n");
+
+    // Prepare file names and paths
+    std::tm* f_ts = std::localtime(&time_convert);
+    std::ostringstream ss;
+    ss << std::put_time(f_ts, "%Y-%m-%d_%a_%H:%M:%S");
+    file_timestamp = ss.str();
+    results_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(RESULTS_FILE);
+    events_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(EVENTS_FILE);
+    seu_data_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(SEU_DATA_FILE);
+
+    // Open results file for writing
+    results_file = new std::fstream(results_file_path, std::ios::out | std::ios::binary | std::ios::app);
+    if (!results_file->is_open()) {
+        fprintf(stderr, "Error opening results file for writing: %s\n", results_file_path.c_str());
+        results_file->close();
+        exit(EXIT_FAILURE);
+    }
+
+    // Open events file for writing
+    events_file = new std::fstream(events_file_path, std::ios::out | std::ios::binary | std::ios::app);
+    if (!events_file->is_open()) {
+        fprintf(stderr, "Error opening events file for writing: %s\n", events_file_path.c_str());
+        events_file->close();
+        exit(EXIT_FAILURE);
+    }
+
+    // Open SEU data file for writing
+    #ifdef ENABLE_SEU_DATA_LOGGING
+    seu_data_file = new std::fstream(seu_data_file_path, std::ios::out | std::ios::binary | std::ios::app);
+    if (!seu_data_file->is_open()) {
+        fprintf(stderr, "Error opening SEU data file for writing: %s\n", seu_data_file_path.c_str());
+        seu_data_file->close();
+        exit(EXIT_FAILURE);
+    }
+    #endif
+
+    // Write headers to output files
+    printf("Writing header to output files...\n");
+    write_header_to_results_file(results_file);
+    write_header_to_events_file(events_file);
+
+    /* ----------------------------------------------- */
+    /* Setup trigger signal from beam line and Arduino */
+    /* ----------------------------------------------- */
+    fprintf(stdout,"\n# ---------------------------------------------- #\n");
+    fprintf(stdout,"# --- Setup beam and Arduino trigger signals --- #\n");
+    fprintf(stdout,"# ---------------------------------------------- #\n\n");
+
+    // Prepare variables for GPIO setup
+    int Init;
+    int stat;
+
+    // Intitalize Orin GPIO library
+    fprintf(stdout, "GPIO library initialization...\n");
+    Init = gpioInitialise();
+    if (Init < 0) {
+        fprintf(stdout,"Jetgpio initialisation failed. Error code:  %d\n", Init);
+        exit(1);
+    }
+
+    // Set up GPIO pin for beam START trigger
+    fprintf(stdout, "GPIO pin %d setup for beam START trigger...\n", beam_start_gpio);
+    stat = gpioSetMode(beam_start_gpio, JET_INPUT); // Set GPIO pin as input
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set pin mode for beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
+        exit(1);
+    }
+    // Set up interrupt handler for EITHER edge on the beam START trigger GPIO pin
+    fprintf(stdout, "Interrupt handler setup for EITHER edge beam START trigger...\n");
+    stat = gpioSetISRFunc(beam_start_gpio, EITHER_EDGE, 10 /* us */, &beam_start_timestamp, &beam_line_start_trigger);
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set alert function for EITHER edge beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
+        exit(1);
+    }
+    fprintf(stdout,"GPIO pin %d set up for EITHER edge beam START trigger.\n", beam_start_gpio);
+
+    // Set up GPIO pin for beam STOP trigger
+    fprintf(stdout, "GPIO pin %d setup for STOP trigger...\n", beam_stop_gpio);
+    stat = gpioSetMode(beam_stop_gpio, JET_INPUT); // Set GPIO pin as input
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set pin mode for beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
+        exit(1);
+    }
+    // Set up interrupt handler for EITHER edge on the beam STOP trigger GPIO pin
+    fprintf(stdout, "Interrupt handler setup for EITHER edge beam STOP trigger...\n");
+    stat = gpioSetISRFunc(beam_stop_gpio, EITHER_EDGE, 10 /* us */, &beam_stop_timestamp, &beam_line_stop_trigger);
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set alert function for EITHER edge beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
+        exit(1);
+    }
+    fprintf(stdout,"GPIO pin %d set up for EITHER edge beam STOP trigger.\n", beam_stop_gpio);
+
+    // Set up GPIO pin for Arduino signal from beam line
+    fprintf(stdout, "GPIO pin %d setup for Arduino signal...\n", arduino_gpio);
+    stat = gpioSetMode(arduino_gpio, JET_INPUT); // Set GPIO pin as input
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set pin mode for Arduino GPIO %d. Error code: %d\n", arduino_gpio, stat);
+        exit(1);
+    }
+    // Set up interrupt handler for RISING edge Arduino trigger GPIO pin
+    fprintf(stdout, "Interrupt handler setup for Arduino signal...\n");
+    stat = gpioSetISRFunc(arduino_gpio, RISING_EDGE, 10 /* us */, &arduino_timestamp, &arduino_trigger);
+    if (stat < 0)
+    {
+        fprintf(stdout,"Failed to set alert function for Arduino RISING trigger GPIO %d. Error code: %d\n", arduino_gpio, stat);
+        exit(1);
+    }
+    fprintf(stdout,"GPIO pin %d set up for Arduino RISING trigger signal from beam line.\n", arduino_gpio);
+
+    while(true){
+        // Increment child process spawn count
+        spawn_count++;
+
+        // Print statup message for kernel execution loop
+        fprintf(stdout, "\n# ---------------------------------------- #\n");
+        fprintf(stdout, "# --- KERNEL EXECUTION LOOP %lu started. --- #\n", spawn_count);
+        fprintf(stdout, "# ---------------------------------------- #\n");
+
+        // Spawn child process for kernel execution
+        pid = fork();
+
+        // FORK failure
+        if (pid < 0) {
+            fprintf(stderr, "Fork failed. Exiting...\n");
+            exit(EXIT_FAILURE);
+
+        // CHILD process - KERNEL EXECUTION LOOP
+        } else if (pid == 0) {
+            kernel_execution_loop();
+            cleanup_kernel_execution_loop();
+            break; // Exit child process after kernel execution loop
+
+        // PARENT process - Wait for child process to complete
+        } else {
+            int status;
+            fprintf(stdout, "PARENT: Wait for kernel execution loop %lu\n", spawn_count);
+            waitpid(pid, &status, 0);
+            fprintf(stdout, "PARENT: Kernel execution loop %lu status: %d\n", spawn_count, WEXITSTATUS(status));
+        }
+    }
 
     exit(0); // Exit normally to ensure atexit handler is called
 }
