@@ -7,7 +7,6 @@
 #include <helper_cuda.h>
 #include "kernels.cuh"
 // #include <ctime>
-#include <jetgpio.h>
 #include <fstream>
 #include <filesystem>
 #include <chrono>
@@ -38,17 +37,6 @@
 #define APP_EXIT_EVENT_ID -100
 
 // #define ENABLE_SEU_DATA_LOGGING
-
-// /* Global variable to interrupt the loop later on */
-static volatile int wait_beam_start = 0;
-unsigned long beam_start_timestamp;
-unsigned long beam_stop_timestamp;
-unsigned long arduino_timestamp;
-
-// /* Variable for trigger GPIO pin */
-int beam_start_gpio = 7;
-int beam_stop_gpio = 11;
-int arduino_gpio = 12;
 
 /* Global variables */
 time_t time_convert;
@@ -318,69 +306,6 @@ void error_event_to_file(
     );
 }
 
-void beam_start_event_to_file(
-        std::fstream *file,
-        unsigned long beam_start_timestamp // trigger info
-)
-{
-    write_events_to_file(
-        file,
-        BEAM_START_EVENT_ID, // repetition
-        0, // seu_count
-        0, // kernel_duration
-        0, // kernel_start_timestamp
-        0, // kernel_end_timestamp
-        false, // repetition_cancelled
-        0, // cuda_error_code
-        0, // error_timestamp
-        beam_start_timestamp,
-        0, // beam_stop_timestamp
-        0 // arduino_timestamp
-    );
-}
-
-void beam_stop_event_to_file(
-        std::fstream *file,
-        unsigned long beam_stop_timestamp // trigger info
-)
-{
-    write_events_to_file(
-        file,
-        BEAM_STOP_EVENT_ID, // repetition
-        0, // seu_count
-        0, // kernel_duration
-        0, // kernel_start_timestamp
-        0, // kernel_end_timestamp
-        false, // repetition_cancelled
-        0, // cuda_error_code
-        0, // error_timestamp
-        0, // beam_start_timestamp
-        beam_stop_timestamp,
-        0 // arduino_timestamp
-    );
-}
-
-void arduino_event_to_file(
-        std::fstream *file,
-        unsigned long arduino_timestamp // arduino info
-)
-{
-    write_events_to_file(
-        file,
-        ARDUINO_EVENT_ID, // repetition
-        0, // seu_count
-        0, // kernel_duration
-        0, // kernel_start_timestamp
-        0, // kernel_end_timestamp
-        false, // repetition_cancelled
-        0, // cuda_error_code
-        0, // error_timestamp
-        0, // beam_start_timestamp
-        0, // beam_stop_timestamp
-        arduino_timestamp
-    );
-}
-
 /* ------------------- */
 /* Timestamp Functions */
 /* ------------------- */
@@ -431,63 +356,10 @@ void get_seu_indices(float* C, float* C_ref, int M, int N, int* error_row_idx, i
     }
 }
 
-/* --------------------------- */
-/* Beam Line Trigger Functions */
-/* --------------------------- */
-
-/* Function to handle RISING edge beam START trigger */
-void beam_line_start_trigger() {
-    time_t time = static_cast<time_t>(beam_start_timestamp/1e9); // Convert nanoseconds to seconds
-    fprintf(stdout,"Beam START signal timestamp: %lu [us], %s\n", (unsigned long)(beam_start_timestamp/1e3), ctime(&time));
-    wait_beam_start = 0;
-
-    // Write trigger timestamp to events file
-    beam_start_event_to_file(
-        events_file,
-        beam_start_timestamp
-    );
-}
-
-/* Function to handle RISING edge beam STOP trigger */
-void beam_line_stop_trigger() {
-    time_t time = static_cast<time_t>(beam_stop_timestamp/1e9); // Convert nanoseconds to seconds
-    fprintf(stdout,"Beam STOP signal timestamp: %lu [us], %s\n", (unsigned long)(beam_stop_timestamp/1e3), ctime(&time));
-
-    // Write trigger timestamp to events file
-    beam_stop_event_to_file(
-        events_file,
-        beam_stop_timestamp
-    );
-}
-
-/* Function to handle RISING edge Arduino trigger */
-void arduino_trigger() {
-    time_t time = static_cast<time_t>(arduino_timestamp/1e9); // Convert nanoseconds to seconds
-    fprintf(stdout,"Arduino signal timestamp: %lu [us], %s\n", (unsigned long)(arduino_timestamp/1e3), ctime(&time));
-
-    // Write trigger timestamp to events file
-    arduino_event_to_file(
-        events_file,
-        arduino_timestamp
-    );
-}
-
-/* ---------------------- */
-/* Exit Handler Functions */
-/* ---------------------- */
-
 // Signal handler for Ctrl+C
 void signal_handler(int signum) {
-    if (wait_beam_start)
-    {
-        fprintf(stdout,"\nUser pressed Ctrl+C. Stopping wait for beam START signal...\n");
-        wait_beam_start = 0;
-    }
-    else
-    {
-        fprintf(stdout,"\nUser pressed Ctrl+C. Exiting program...\n");
-        exit(0);
-    }
+    fprintf(stdout,"\nUser pressed Ctrl+C. Exiting program...\n");
+    exit(0);
 }
 
 void atexit_handler() {
@@ -502,10 +374,6 @@ void atexit_handler() {
         fprintf(stdout,"\n# ---------------------------------------------- #\n");
         fprintf(stdout,"# --- Exit application and cleanup resources --- #\n");
         fprintf(stdout,"# ---------------------------------------------- #\n\n");
-
-        // Release peripherals
-        fprintf(stdout, "Release GPIO.\n");
-        gpioTerminate();
 
         // Free up memories
         fprintf(stdout, "Release host memory.\n");
@@ -739,24 +607,6 @@ void kernel_execution_loop(){
         #endif
 
         fprintf(stdout,"Sanity check completed. SEUs prior to beam detected: %lld\n", seu_count);
-    }
-
-    /* --------------------------- */
-    /* --- Wait for beam START --- */
-    /* --------------------------- */
-    // Wait for beam START if enabled
-    if (enable_beam_signal_wait)
-    {
-        wait_beam_start = 1; // Enable waiting for trigger
-        fprintf(stdout,"Waiting for beam START signal from beam line...\n");
-        while (wait_beam_start) {
-            // Wait for the GPIO pin to go high
-        }
-        fprintf(stdout,"Beam START received!\n");
-    }
-    else
-    {
-        fprintf(stdout,"Waiting for beam START signal reception is DISABLED. Starting kernel execution immediately...\n");
     }
 
     /* -------------------- */
@@ -1216,12 +1066,6 @@ int main(int argc, char **argv){
     error_col_idx = (int *)calloc(M * N, sizeof(int));
     error_value = (float *)calloc(M * N, sizeof(float));
 
-    if (enable_beam_signal_wait and getuid() != 0)
-    {
-        fprintf(stdout,"Beam signal reception is enabled, but the program is not running with root privileges. Please run as root or disable beam signal reception. Exiting...\n");
-        exit(-1);
-    }
-
     /* ----------------------------------------- */
     /* Allocate host memory and read input files */
     /* ----------------------------------------- */
@@ -1304,79 +1148,6 @@ int main(int argc, char **argv){
     printf("Writing header to output files...\n");
     write_header_to_results_file(results_file);
     write_header_to_events_file(events_file);
-
-    /* ----------------------------------------------- */
-    /* Setup trigger signal from beam line and Arduino */
-    /* ----------------------------------------------- */
-    fprintf(stdout,"\n# ---------------------------------------------- #\n");
-    fprintf(stdout,"# --- Setup beam and Arduino trigger signals --- #\n");
-    fprintf(stdout,"# ---------------------------------------------- #\n\n");
-
-    // Prepare variables for GPIO setup
-    int Init;
-    int stat;
-
-    // Intitalize Orin GPIO library
-    fprintf(stdout, "GPIO library initialization...\n");
-    Init = gpioInitialise();
-    if (Init < 0) {
-        fprintf(stdout,"Jetgpio initialisation failed. Error code:  %d\n", Init);
-        exit(1);
-    }
-
-    // Set up GPIO pin for beam START trigger
-    fprintf(stdout, "GPIO pin %d setup for beam START trigger...\n", beam_start_gpio);
-    stat = gpioSetMode(beam_start_gpio, JET_INPUT); // Set GPIO pin as input
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set pin mode for beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
-        exit(1);
-    }
-    // Set up interrupt handler for EITHER edge on the beam START trigger GPIO pin
-    fprintf(stdout, "Interrupt handler setup for EITHER edge beam START trigger...\n");
-    stat = gpioSetISRFunc(beam_start_gpio, EITHER_EDGE, 10 /* us */, &beam_start_timestamp, &beam_line_start_trigger);
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set alert function for EITHER edge beam START trigger GPIO %d. Error code: %d\n", beam_start_gpio, stat);
-        exit(1);
-    }
-    fprintf(stdout,"GPIO pin %d set up for EITHER edge beam START trigger.\n", beam_start_gpio);
-
-    // Set up GPIO pin for beam STOP trigger
-    fprintf(stdout, "GPIO pin %d setup for STOP trigger...\n", beam_stop_gpio);
-    stat = gpioSetMode(beam_stop_gpio, JET_INPUT); // Set GPIO pin as input
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set pin mode for beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
-        exit(1);
-    }
-    // Set up interrupt handler for EITHER edge on the beam STOP trigger GPIO pin
-    fprintf(stdout, "Interrupt handler setup for EITHER edge beam STOP trigger...\n");
-    stat = gpioSetISRFunc(beam_stop_gpio, EITHER_EDGE, 10 /* us */, &beam_stop_timestamp, &beam_line_stop_trigger);
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set alert function for EITHER edge beam STOP trigger GPIO %d. Error code: %d\n", beam_stop_gpio, stat);
-        exit(1);
-    }
-    fprintf(stdout,"GPIO pin %d set up for EITHER edge beam STOP trigger.\n", beam_stop_gpio);
-
-    // Set up GPIO pin for Arduino signal from beam line
-    fprintf(stdout, "GPIO pin %d setup for Arduino signal...\n", arduino_gpio);
-    stat = gpioSetMode(arduino_gpio, JET_INPUT); // Set GPIO pin as input
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set pin mode for Arduino GPIO %d. Error code: %d\n", arduino_gpio, stat);
-        exit(1);
-    }
-    // Set up interrupt handler for RISING edge Arduino trigger GPIO pin
-    fprintf(stdout, "Interrupt handler setup for Arduino signal...\n");
-    stat = gpioSetISRFunc(arduino_gpio, RISING_EDGE, 10 /* us */, &arduino_timestamp, &arduino_trigger);
-    if (stat < 0)
-    {
-        fprintf(stdout,"Failed to set alert function for Arduino RISING trigger GPIO %d. Error code: %d\n", arduino_gpio, stat);
-        exit(1);
-    }
-    fprintf(stdout,"GPIO pin %d set up for Arduino RISING trigger signal from beam line.\n", arduino_gpio);
 
     while(true){
         // Increment child process spawn count
