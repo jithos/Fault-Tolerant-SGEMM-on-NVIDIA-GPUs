@@ -998,9 +998,10 @@ int main(int argc, char **argv){
 
     while (completed_streams < repeat_kernel || repeat_kernel == -1) {
     
-        /* ------------------------- */
-        /* Check for any CUDA errors */
-        /* ------------------------- */
+        /* ------------------------------------------ */
+        /* ERROR HANDLING - Check for any CUDA errors */
+        /* ------------------------------------------ */
+        bool unrecoverable_timeouts_detected = false;
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
             save_timestamp(&error_timestamp);
@@ -1042,6 +1043,7 @@ int main(int argc, char **argv){
                     }
 
                     // NOTE: Edge case to be handled if the only seen error is the CUDA kernels throwing errors, but no SEUs detecting the resulting matrices C. If SEUs detected in result matrices C, then this is not necessary.
+                    // Case A1 - Handle successful kernel execution during clean up due to a CUDA error
                     if (stream_timeout == false)
                     {
                         kernel_timeout_counter = 0; // Reset kernel timeout counter
@@ -1083,7 +1085,8 @@ int main(int argc, char **argv){
                         // Accumulate SEU counts over all kernel repetitions
                         seu_count_total += seu_count;
                     }
-                    else // Handle kernel timeout
+                    // Case A2 - Handle kernel timeout during clean up due to a CUDA error
+                    else
                     {
                         kernel_timeout_counter++;
                         fprintf(stdout, "Kernel timeout\n");
@@ -1105,43 +1108,17 @@ int main(int argc, char **argv){
                     completed_streams++;
                 }
             }
-
-            // Check if kernel timeout counter has exceeded threshold
-            bool unrecoverable_timeouts_detected = false;
-            if (kernel_timeout_counter >= KERNEL_ALLOWED_MAX_TIMEOUTS) {
-                unrecoverable_timeouts_detected = true;
-            }
-
-            // Exit application for unrecoverable CUDA errors
-            if (err == cudaErrorIllegalAddress || unrecoverable_timeouts_detected == true)
-            {
-                if (err == cudaErrorIllegalAddress)
-                {
-                    fprintf(stdout,"ERROR: An illegal memory access was detected, which is a unrecoverable error.\n");
-                }
-
-                if (unrecoverable_timeouts_detected == true)
-                {
-                    fprintf(stdout,"ERROR: Last %d streams have timed out. This is treated as a unrecoverable error.\n", kernel_timeout_counter);
-                }
-
-                // Reset the device to recover from the error
-                cudaDeviceReset();
-                fprintf(stdout,"WARNING: CUDA device was reset. Exiting application.\n");
-
-                // Exit application
-                exit(-1);
-            }
         }
 
-        /* ---------------------------------- */
-        /* Check which streams have completed */
-        /* ---------------------------------- */
+        /* ----------------------------------------------------- */
+        /* STREAM RECYCLING - Check which streams have completed */
+        /* ----------------------------------------------------- */
         for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
             if (active_streams[i] == -1) continue; // Skip inactive streams
 
-            // Handle one completed stream at a time
+            // CASE B1 - Handle one completed stream at a time during normal execution
             if (cudaEventQuery(kernel_stop[i]) == cudaSuccess) {
+                kernel_timeout_counter = 0; // Reset kernel timeout counter
                 save_timestamp(&(kernel_exec_end_time[i])); // Record end time
                 cudaEventElapsedTime(&kernel_time_ms[i], kernel_start[i], kernel_stop[i]);
                 fprintf(stdout,"INFO: %d - CPU: %lu us, CUDA: %d us, ", active_streams[i], kernel_exec_end_time[i] - kernel_exec_start_time[i], int(kernel_time_ms[i]*1000.0));
@@ -1195,11 +1172,64 @@ int main(int argc, char **argv){
 
                 break; // Only handle one completed stream each iteration, so that new kernels can be scheduled
             }
+            // CASE B2 - Check and handle timeout of the kernel execution for this stream during normal execution
+            else
+            {
+                save_timestamp(&kernel_timeout_end);
+                if (kernel_timeout_end - kernel_exec_start_time[i] > KERNEL_MAX_TIMEOUT_DURATION) {
+                    fprintf(stdout,"ERROR: Kernel execution for repetition %d has timed out. Marking stream as inactive.\n", active_streams[i]);
+                    kernel_timeout_counter++; // Increment the timeout counter
+
+                    // Save event to file about kernel timeout
+                    kernel_event_to_file(
+                        events_file,
+                        active_streams[i],
+                        0, // seu_count
+                        0, // Convert ms to us, CUDA Event timing
+                        kernel_exec_start_time[i], // Start timestamp of this kernel, OS timestamp timing
+                        0, // End timestamp of this kernel, OS timestamp timing
+                        true // repetition_cancelled
+                    );
+
+                    // LAST STEP - Update state variables for the cancelled stream
+                    active_streams[i] = -1; // Mark this stream as inactive
+                    completed_streams++;
+                }
+            }
         }
 
-        /* --------------------------------------------- */
-        /* Schedule new kernels for any inactive streams */
-        /* --------------------------------------------- */
+        /* ----------------------------------------------------------------------- */
+        /* UNRECOVERABLE ERROR HANDLING - Handle unrecoverable error and reset GPU */
+        /* ----------------------------------------------------------------------- */
+        // Check if kernel timeout counter has exceeded threshold
+        if (kernel_timeout_counter >= KERNEL_ALLOWED_MAX_TIMEOUTS) {
+            unrecoverable_timeouts_detected = true;
+        }
+
+        // Exit application for unrecoverable CUDA errors
+        if (err == cudaErrorIllegalAddress || unrecoverable_timeouts_detected == true)
+        {
+            if (err == cudaErrorIllegalAddress)
+            {
+                fprintf(stdout,"ERROR: An illegal memory access was detected, which is a unrecoverable error.\n");
+            }
+
+            if (unrecoverable_timeouts_detected == true)
+            {
+                fprintf(stdout,"ERROR: Last %d streams have timed out. This is treated as a unrecoverable error.\n", kernel_timeout_counter);
+            }
+
+            // Reset the device to recover from the error
+            cudaDeviceReset();
+            fprintf(stdout,"WARNING: CUDA device was reset. Exiting application.\n");
+
+            // Exit application
+            exit(-1);
+        }
+
+        /* ----------------------------------------------------------------- */
+        /* STREAM SCHEDULING - Schedule new kernels for any inactive streams */
+        /* ----------------------------------------------------------------- */
         for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
 
             // Find an inactive stream slot
