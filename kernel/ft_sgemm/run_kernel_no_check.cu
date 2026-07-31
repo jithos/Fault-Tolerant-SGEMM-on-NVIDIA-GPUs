@@ -579,7 +579,7 @@ void kernel_execution_loop(){
         CUDA_CALLER(cudaMemcpy(C[0], dC[0], sizeof(float) * M * N, cudaMemcpyDeviceToHost)); // TODO: make async with stream
 
         // Inject error
-        C[0][7*M + 15] *= 0.1; // Inject an error in the first element of C for testing
+        // C[0][7*M + 15] *= 0.1; // Inject an error in the first element of C for testing
 
         // Count SEU errors by comparing C with C_ref
         printf("Calcuating SEU count for sanity check...\n");
