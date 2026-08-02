@@ -24,7 +24,7 @@
 #define STDOUT_FILE "stdout.txt"
 #define STDERR_FILE "stderr.txt"
 // #define SYNC_BETWEEN_KERNELS
-#define MAX_CONCURRENT_KERNELS 2
+#define MAX_CONCURRENT_KERNELS 6
 #define KERNEL_MAX_TIMEOUT_DURATION (5 * 1000) /* [us] */
 #define KERNEL_ALLOWED_MAX_TIMEOUTS 4 /* Maximum number of allowed kernel timeouts before treating as unrecoverable error */
 
