@@ -254,7 +254,7 @@ void atexit_handler() {
     if (pid == 0)
     {
         fprintf(stdout,"\n# -------------------------------------------------- #\n");
-        fprintf(stdout,"# --- KERNEL EXECUTION LOOP %d ended. --- #\n", spawn_count);
+        fprintf(stdout,"# --- KERNEL EXECUTION LOOP %lu ended. --- #\n", spawn_count);
         fprintf(stdout,"# -------------------------------------------------- #\n\n");
     }
     else
