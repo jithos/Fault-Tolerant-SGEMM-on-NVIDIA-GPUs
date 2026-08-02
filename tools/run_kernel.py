@@ -38,7 +38,7 @@ if __name__ == "__main__":
         command = ["sudo", "-E", "/opt/nvidia/nsight-compute/2024.3.1/target/linux-v4l_l4t-t210-a64/ncu", "--config-file", "off", "--export", f"{ks.NCU_RESULTS_FOLDER}ncu_exp_{ks.EXPERIMENT_NAME}_{ks.KERNEL_LIST[ks.KERNEL_NUMBER]}", "--force-overwrite", "--kernel-name", f"{ks.KERNEL_LIST[ks.KERNEL_NUMBER]}"] + ks.KERNEL_COMMAND
         print("NCU profiling enabled")
     elif run_nsys:
-        command = ["sudo", "-E", "nsys", "profile", "--stats=true", "--output", f"{ks.NSYS_RESULTS_FOLDER}nsys_exp_{ks.EXPERIMENT_NAME}_{ks.KERNEL_LIST[ks.KERNEL_NUMBER]}", "--force-overwrite", "true"] + ks.KERNEL_COMMAND
+        command = ["sudo", "-E", "nsys", "profile", "--trace=cuda", "--stats=true", "--output", f"{ks.NSYS_RESULTS_FOLDER}nsys_exp_{ks.EXPERIMENT_NAME}_{ks.KERNEL_LIST[ks.KERNEL_NUMBER]}", "--force-overwrite", "true"] + ks.KERNEL_COMMAND
         print("NSYS profiling enabled")
     # elif print_ncu:
     #     command = ["ncu", "-i", ncu_report_file]
