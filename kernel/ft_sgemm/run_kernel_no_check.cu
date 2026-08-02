@@ -25,7 +25,7 @@
 #define STDERR_FILE "stderr.txt"
 // #define SYNC_BETWEEN_KERNELS
 #define MAX_CONCURRENT_KERNELS 2
-#define KERNEL_MAX_TIMEOUT_DURATION (500 * 1e3) /* [us], 1e3 need as resolution is in nanoseconds */
+#define KERNEL_MAX_TIMEOUT_DURATION (5 * 1000) /* [us] */
 #define KERNEL_ALLOWED_MAX_TIMEOUTS 4 /* Maximum number of allowed kernel timeouts before treating as unrecoverable error */
 
 // #define SANITY_CHECK_EVENT_ID -1
