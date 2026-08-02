@@ -1179,6 +1179,9 @@ int main(int argc, char **argv){
             waitpid(pid, &status, 0);
             fprintf(stdout, "PARENT: Kernel execution loop %lu status: %d\n", spawn_count, WEXITSTATUS(status));
         }
+
+        // Stop if kernel repetition count is provided
+        if(repeat_kernel != -1) break;
     }
 
     exit(0); // Exit normally to ensure atexit handler is called
