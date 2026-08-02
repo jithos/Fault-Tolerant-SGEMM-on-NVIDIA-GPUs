@@ -19,7 +19,6 @@
 #include <sys/wait.h>
 
 #define RESULTS_FILE "results.csv"
-#define EVENTS_FILE "events.csv"
 #define SEU_DATA_FILE "seu_data.bin"
 #define STDOUT_FILE "stdout.txt"
 #define STDERR_FILE "stderr.txt"
@@ -58,10 +57,8 @@ char file_B_name[256];
 char file_C_name[256];
 std::string file_timestamp;
 std::string results_file_path;
-std::string events_file_path;
 std::string seu_data_file_path;
 std::fstream *results_file = NULL;
-std::fstream *events_file = NULL;
 std::fstream *seu_data_file = NULL;
 int matrix_size = 99;
 long long int seu_count = 0;
@@ -131,33 +128,6 @@ void write_header_to_results_file(std::fstream *file) {
     (*file).flush(); // Ensure everything is written to the file immediately
 }
 
-void write_header_to_events_file(std::fstream *file) {
-    
-    /* ----------------------------- */
-    /* Write header for events file */
-    /* ----------------------------- */
-
-    // Write header for events file
-    std::stringstream events_header;
-    events_header
-        << "repetition" << ","
-        << "seu_count" << ","
-        << "kernel_duration" << ","
-        << "kernel_start_timestamp" << ","
-        << "kernel_end_timestamp" << ","
-        << "repetition_cancelled" << ","
-        << "cuda_error_code" << ","
-        << "error_timestamp" << ","
-        << "beam_start_timestamp" << ","
-        << "beam_stop_timestamp" << ","
-        << "arduino_timestamp" << ","
-        << "app_start_timestamp" << ","
-        << "app_end_timestamp" << "\n";
-    // fprintf(stdout,events_header.str().c_str());
-    (*file) << events_header.str();
-    (*file).flush(); // Ensure everything is written to the file immediately
-}
-
 void write_results_to_file(
         std::fstream *file,
         int matrix_size,
@@ -198,41 +168,6 @@ void write_results_to_file(
     // (*file).flush(); // Ensure everything is written to the file immediately
 }
 
-void write_events_to_file(
-        std::fstream *file,
-        int repetition, // kernel info
-        long long int seu_count, // kernel info
-        uint64_t kernel_duration, // kernel info
-        uint64_t kernel_start_timestamp, // kernel info
-        uint64_t kernel_end_timestamp, // kernel info
-        bool repetition_cancelled, // repetition info
-        int cuda_error_code, // error info
-        uint64_t error_timestamp, // error info
-        unsigned long beam_start_timestamp, // trigger info
-        unsigned long beam_stop_timestamp, // trigger info
-        unsigned long arduino_timestamp // arduino info
-    ) {
-
-    // Write the events to csv file
-    std::stringstream result_line;
-    result_line
-        << repetition << ","
-        << seu_count << ","
-        << kernel_duration << ","
-        << kernel_start_timestamp << ","
-        << kernel_end_timestamp << ","
-        << repetition_cancelled << ","
-        << cuda_error_code << ","
-        << error_timestamp << ","
-        << beam_start_timestamp << ","
-        << beam_stop_timestamp << ","
-        << arduino_timestamp << ","
-        << app_start_timestamp << "," // global variable for application start timestamp
-        << app_end_timestamp << "\n"; // global variable for application end timestamp
-    (*file) << result_line.str();
-    // (*file).flush(); // Ensure everything is written to the file immediately
-}
-
 void write_seu_data_to_file(
     std::fstream *file,
     int repetition,
@@ -255,55 +190,6 @@ void write_seu_data_to_file(
         (*file).write(reinterpret_cast<const char*>(error_value), sizeof(float) * seu_count);
     }
     // (*file).flush(); // Ensure everything is written to the file immediately
-}
-
-void kernel_event_to_file(
-        std::fstream *file,
-        int repetition, // kernel info
-        long long int seu_count, // kernel info
-        uint64_t kernel_duration, // kernel info
-        uint64_t kernel_start_timestamp, // kernel info
-        uint64_t kernel_end_timestamp, // kernel info
-        bool repetition_cancelled // repetition info
-)
-{
-    write_events_to_file(
-        file,
-        repetition,
-        seu_count,
-        kernel_duration,
-        kernel_start_timestamp,
-        kernel_end_timestamp,
-        repetition_cancelled,
-        0, // cuda_error_code
-        0, // error_timestamp
-        0, // beam_start_timestamp
-        0, // beam_stop_timestamp
-        0 // arduino_timestamp
-    );
-}
-
-void error_event_to_file(
-                std::fstream *file,
-                int event_id,
-                int cuda_error_code,
-                uint64_t error_time
-)
-{
-    write_events_to_file(
-        file,
-        event_id, // repetition
-        0, // seu_count
-        0, // kernel_duration
-        0, // kernel_start_timestamp
-        0, // kernel_end_timestamp
-        false, // repetition_cancelled
-        cuda_error_code, // cuda_error_code
-        error_time, // error_timestamp
-        0, // beam_start_timestamp
-        0, // beam_stop_timestamp
-        0 // arduino_timestamp
-    );
 }
 
 /* ------------------- */
@@ -358,7 +244,9 @@ void get_seu_indices(float* C, float* C_ref, int M, int N, int* error_row_idx, i
 
 // Signal handler for Ctrl+C
 void signal_handler(int signum) {
-    fprintf(stdout,"\nUser pressed Ctrl+C. Exiting program...\n");
+    uint64_t timestamp;
+    save_timestamp(&timestamp);
+    fprintf(stdout, "INFO: event: CTRL_C, message: User pressed Ctrl+C. Exiting program., timestamp: %lu\n", timestamp);
     exit(0);
 }
 
@@ -391,11 +279,6 @@ void atexit_handler() {
             results_file->close();
             // fprintf(stdout,"Saved results to %s\n", results_file_path.c_str());
         }
-        if (events_file != NULL) {
-            events_file->flush();
-            events_file->close();
-            // fprintf(stdout,"Saved events to %s\n", events_file_path.c_str());
-        }
         #ifdef ENABLE_SEU_DATA_LOGGING
         if (seu_data_file != NULL) {
             seu_data_file->flush();
@@ -408,9 +291,10 @@ void atexit_handler() {
         fprintf(stdout, "Reset GPU.\n");
         cudaDeviceReset();
 
-        uint64_t exit_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+        uint64_t exit_time;
+        save_timestamp(&exit_time);
         time_convert = static_cast<time_t>(exit_time/1e6); // Convert microseconds to seconds
-        fprintf(stdout,"\nProgram exit timestamp: %lu [us], %s", exit_time, ctime(&time_convert));
+        fprintf(stdout, "INFO: event: APP_EXIT, message: Application exit, timestamp: %lu [us], datetime: %s\n", exit_time, ctime(&time_convert));
         fprintf(stdout, "\n--------------------------------------------------------------------------\n");
     }
 }
@@ -441,10 +325,9 @@ void cleanup_kernel_execution_loop()
     fprintf(stdout, "Completed streams: %d, Total SEU count: %lld\n", completed_streams, seu_count_total);
 
     // Timestamp end of application
-    app_end_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    save_timestamp(&app_end_timestamp);
     time_convert = static_cast<time_t>(app_end_timestamp/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"\nKernel execution loop end timestamp: %lu [us], %s", app_end_timestamp, ctime(&time_convert));
-    fprintf(stdout,"nKernel execution loop duration: %lu [us]\n", app_end_timestamp - app_start_timestamp);
+    fprintf(stdout, "INFO: event: APP_END, CPU: %lu [us], SEU_TOT: %lld, START: %lu, STOP: %lu, datetime: %s\n", app_end_timestamp - app_start_timestamp, seu_count_total, app_start_timestamp, app_end_timestamp, ctime(&time_convert));
 
     // Flush files
     if (results_file != NULL){
@@ -469,19 +352,6 @@ void cleanup_kernel_execution_loop()
         results_file->flush();
         fprintf(stdout,"Saved results to %s\n", results_file_path.c_str());
     }
-    if (events_file != NULL) {
-        kernel_event_to_file(
-            events_file,
-            APP_EXIT_EVENT_ID,
-            0, // seu_count
-            0, // Convert ms to us, CUDA event timing
-            0, // Start timestamp of sanity check kernel, OS timestamp timing
-            0, // End timestamp of sanity check kernel, OS timestamp timing
-            false // repetition_cancelled
-        );
-        events_file->flush();
-        fprintf(stdout,"Saved events to %s\n", events_file_path.c_str());
-    }
     #ifdef ENABLE_SEU_DATA_LOGGING
     if (seu_data_file != NULL) {
         seu_data_file->flush();
@@ -490,7 +360,8 @@ void cleanup_kernel_execution_loop()
     #endif
 
     // reset CUDA device to cleanup
-    fprintf(stdout, "Reset GPU.\n");
+    save_timestamp(&gpu_reset_timestamp);
+    fprintf(stdout, "INFO: event: GPU_RESET_AT_EXIT, message: Reseting GPU by default at exit, timestamp: %lu\n", gpu_reset_timestamp);
     cudaDeviceReset();
 }
 
@@ -585,15 +456,8 @@ void kernel_execution_loop(){
         printf("Calcuating SEU count for sanity check...\n");
         count_seu_errors(C[0], C_ref, M, N, &seu_count, error_row_idx, error_col_idx, error_value);
 
-        kernel_event_to_file(
-            events_file,
-            -1,
-            seu_count,
-            (uint64_t)(sanity_time_ms * 1000), // Convert ms to us, CUDA event timing
-            sanity_kernel_start_time, // Start timestamp of sanity check kernel, OS timestamp timing
-            sanity_kernel_end_time, // End timestamp of sanity check kernel, OS timestamp timing
-            false // repetition_cancelled
-        );
+        fprintf(stdout, "INFO: event: SANITY_CHECK, stream: %d, CPU: %6lu [us], CUDA: %6d [us], SEU: %lld, SEU_TOT: %lld, START: %lu, STOP: %lu\n", -1, sanity_kernel_end_time - sanity_kernel_start_time, (int)(sanity_time_ms * 1000), seu_count, (long long int)0, sanity_kernel_start_time, sanity_kernel_end_time);
+        fflush(stdout); // Make sure the output is flushed immediately
 
         #ifdef ENABLE_SEU_DATA_LOGGING
         write_seu_data_to_file(
@@ -619,9 +483,7 @@ void kernel_execution_loop(){
     // Print kernel start timestamp
     kernel_launch_start_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     time_convert = static_cast<time_t>(kernel_launch_start_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"Kernel launch start timestamp: %lu [us], %s", kernel_launch_start_time, ctime(&time_convert));
-
-    fprintf(stdout,"Matrix size: %d, Kernel number: %d, Repetitions: %d\n", matrix_size, kernel_number, repeat_kernel);
+    fprintf(stdout,"INFO: event: KERNEL_LAUNCH_START, message: Kernel launch start, timestamp: %lu [us], matrix_size: %d, kernel_number: %d, repetitions: %d, datetime: %s\n", kernel_launch_start_time, matrix_size, kernel_number, repeat_kernel, ctime(&time_convert));
 
     // Setup cuda events and streams for kernel scheduling
     cudaEvent_t kernel_start[MAX_CONCURRENT_KERNELS], kernel_stop[MAX_CONCURRENT_KERNELS];
@@ -673,30 +535,21 @@ void kernel_execution_loop(){
         bool unrecoverable_timeouts_detected = false;
         cudaError_t err = cudaGetLastError();
         if (err != cudaSuccess) {
-            save_timestamp(&error_timestamp);
-            fprintf(stdout, "ERROR: CUDA error detected at %lu: (%s) %s\n", error_timestamp, cudaGetErrorName(err), cudaGetErrorString(err));
 
-            // Report which streams were active at the time of the error
-            fprintf(stdout, "WARNING: Current active streams: ");
+            // Save error to events file
+            save_timestamp(&error_timestamp);
+            fprintf(stdout, "INFO: event: CUDA_ERROR, timestamp: %lu, error_code: %d, error_name: %s, error_message: %s, active_streams: ", error_timestamp, (int)err, cudaGetErrorName(err), cudaGetErrorString(err));
             for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
                 if (active_streams[i] != -1) {
                     fprintf(stdout,"%d,", active_streams[i]);
                 }
             }
             fprintf(stdout, "\n");
-
-            // Save error to events file
-            error_event_to_file(
-                events_file,
-                ERROR_EVENT_ID,
-                (int)err,
-                error_timestamp
-            );
+            fflush(stdout); // Make sure the output is flushed immediately
 
             // Cleanup and destroy all streams
             for (int i = 0; i < MAX_CONCURRENT_KERNELS; i++) {
                 if (active_streams[i] != -1) {
-                    fprintf(stdout,"WARNING: Repetition %d cancelled due to some CUDA error.\n", active_streams[i]);
 
                     // Wait for the stream to finish
                     bool stream_timeout = false;
@@ -716,7 +569,6 @@ void kernel_execution_loop(){
                     if (stream_timeout == false)
                     {
                         kernel_timeout_counter = 0; // Reset kernel timeout counter
-                        fprintf(stdout, "No kernel timeout\n");
 
                         // Record kernel execution time and end timestamp
                         save_timestamp(&(kernel_exec_end_time[i])); // Record end time
@@ -728,16 +580,12 @@ void kernel_execution_loop(){
                         // Check for SEU errors for the active streams
                         count_seu_errors(C[i], C_ref, M, N, &seu_count, error_row_idx, error_col_idx, error_value);
 
+                        // Accumulate SEU counts over all kernel repetitions
+                        seu_count_total += seu_count;
+
                         // Save events to file for the active stream
-                        kernel_event_to_file(
-                            events_file,
-                            active_streams[i],
-                            seu_count,
-                            (uint64_t)(kernel_time_ms[i] * 1000), // Convert ms to us, CUDA Event timing
-                            kernel_exec_start_time[i], // Start timestamp of this kernel, OS timestamp timing
-                            kernel_exec_end_time[i], // End timestamp of this kernel, OS timestamp timing
-                            true // repetition_cancelled
-                        );
+                        fprintf(stdout, "INFO: event: CANCELLED, stream: %d, CPU: %6lu [us], CUDA: %6d [us], SEU: %6lld, SEU_TOT: %lld, START: %lu, STOP: %lu\n", active_streams[i], kernel_exec_end_time[i] - kernel_exec_start_time[i], (int)(kernel_time_ms[i] * 1000), seu_count, seu_count_total, kernel_exec_start_time[i], kernel_exec_end_time[i]);
+                        fflush(stdout);
 
                         // Save seu data to file for the active stream
                         #ifdef ENABLE_SEU_DATA_LOGGING
@@ -751,25 +599,15 @@ void kernel_execution_loop(){
                         );
                         #endif
 
-                        // Accumulate SEU counts over all kernel repetitions
-                        seu_count_total += seu_count;
                     }
                     // Case A2 - Handle kernel timeout during clean up due to a CUDA error
                     else
                     {
                         kernel_timeout_counter++;
-                        fprintf(stdout, "Kernel timeout\n");
 
                         // Save event to file about kernel timeout
-                        kernel_event_to_file(
-                            events_file,
-                            active_streams[i],
-                            0, // seu_count
-                            0, // Convert ms to us, CUDA Event timing
-                            kernel_exec_start_time[i], // Start timestamp of this kernel, OS timestamp timing
-                            0, // End timestamp of this kernel, OS timestamp timing
-                            true // repetition_cancelled
-                        );
+                        fprintf(stdout, "INFO: event: CANCELLED_TIMEOUT, stream: %d, CPU: %6lu [us], CUDA: %6d [us], SEU: %6lld, SEU_TOT: %lld, START: %lu, STOP: %lu\n", active_streams[i], kernel_timeout_end - kernel_exec_start_time[i], 0, (long long int)0, seu_count_total, kernel_exec_start_time[i], kernel_timeout_end);
+                        fflush(stdout);
                     }
 
                     // LAST STEP - Update state variables for the cancelled stream
@@ -790,7 +628,6 @@ void kernel_execution_loop(){
                 kernel_timeout_counter = 0; // Reset kernel timeout counter
                 save_timestamp(&(kernel_exec_end_time[i])); // Record end time
                 cudaEventElapsedTime(&kernel_time_ms[i], kernel_start[i], kernel_stop[i]);
-                fprintf(stdout,"INFO: %d - CPU: %lu us, CUDA: %d us, ", active_streams[i], kernel_exec_end_time[i] - kernel_exec_start_time[i], int(kernel_time_ms[i]*1000.0));
 
                 // Copy results from device to host for this repetition
                 cudaMemcpyAsync(C[i], dC[i], sizeof(float) * M * N, cudaMemcpyDeviceToHost, mem_stream);
@@ -803,22 +640,13 @@ void kernel_execution_loop(){
 
                 // Check for SEU errors for this repetition
                 count_seu_errors(C[i], C_ref, M, N, &seu_count, error_row_idx, error_col_idx, error_value);
-                fprintf(stdout,"SEU: %lld (tot. %lld)", seu_count, seu_count_total + seu_count);
-                // if (seu_count > 0) {
-                //     fprintf(stdout, "c: %d, r: %d, v: %e\n", error_col_idx[0], error_row_idx[0], error_value[0]);
-                // }
-                fprintf(stdout, "\r\n");
+
+                // Accumulate SEU counts over all kernel repetitions
+                seu_count_total += seu_count;
 
                 // Save events to file for this repetition
-                kernel_event_to_file(
-                    events_file,
-                    active_streams[i],
-                    seu_count,
-                    (uint64_t)(kernel_time_ms[i] * 1000), // Convert ms to us, CUDA Event timing
-                    kernel_exec_start_time[i], // Start timestamp of this kernel, OS timestamp timing
-                    kernel_exec_end_time[i], // End timestamp of this kernel, OS timestamp timing
-                    false // repetition_cancelled
-                );
+                fprintf(stdout, "INFO: event: FINISHED, stream: %d, CPU: %6lu [us], CUDA: %6d [us], SEU: %6lld, SEU_TOT: %lld, START: %lu, STOP: %lu\n", active_streams[i], kernel_exec_end_time[i] - kernel_exec_start_time[i], (int)(kernel_time_ms[i] * 1000), seu_count, seu_count_total, kernel_exec_start_time[i], kernel_exec_end_time[i]);
+                fflush(stdout);
 
                 // Save seu data to file for this repetition
                 #ifdef ENABLE_SEU_DATA_LOGGING
@@ -832,9 +660,6 @@ void kernel_execution_loop(){
                 );
                 #endif
 
-                // Accumulate SEU counts over all kernel repetitions
-                seu_count_total += seu_count;
-
                 // LAST STEP - Update state variables
                 active_streams[i] = -1; // Mark this stream as inactive
                 completed_streams++;
@@ -846,19 +671,12 @@ void kernel_execution_loop(){
             {
                 save_timestamp(&kernel_timeout_end);
                 if (kernel_timeout_end - kernel_exec_start_time[i] > KERNEL_MAX_TIMEOUT_DURATION) {
-                    fprintf(stdout,"ERROR: Kernel execution for repetition %d has timed out. Marking stream as inactive.\n", active_streams[i]);
+
                     kernel_timeout_counter++; // Increment the timeout counter
 
                     // Save event to file about kernel timeout
-                    kernel_event_to_file(
-                        events_file,
-                        active_streams[i],
-                        0, // seu_count
-                        0, // Convert ms to us, CUDA Event timing
-                        kernel_exec_start_time[i], // Start timestamp of this kernel, OS timestamp timing
-                        0, // End timestamp of this kernel, OS timestamp timing
-                        true // repetition_cancelled
-                    );
+                    fprintf(stdout, "INFO: event: TIMEOUT, stream: %d, CPU: %6lu [us], CUDA: %6d [us], SEU: %6lld, SEU_TOT: %lld, START: %lu, STOP: %lu\n", active_streams[i], kernel_timeout_end - kernel_exec_start_time[i], 0, (long long int)0, seu_count_total, kernel_exec_start_time[i], kernel_timeout_end);
+                    fflush(stdout);
 
                     // LAST STEP - Update state variables for the cancelled stream
                     active_streams[i] = -1; // Mark this stream as inactive
@@ -880,18 +698,18 @@ void kernel_execution_loop(){
         {
             if (err == cudaErrorIllegalAddress)
             {
-                fprintf(stdout,"ERROR: An illegal memory access was detected, which is a unrecoverable error.\n");
+                fprintf(stdout,"INFO: event: ILLEGAL_MEMORY_ACCESS, message: An illegal memory access was detected, which is a unrecoverable error.\n");
             }
 
             if (unrecoverable_timeouts_detected == true)
             {
-                fprintf(stdout,"ERROR: Last %d streams have timed out. This is treated as a unrecoverable error.\n", kernel_timeout_counter);
+                fprintf(stdout,"INFO: event: TIMEOUT, message: Last %d streams have timed out. This is treated as a unrecoverable error.\n", kernel_timeout_counter);
             }
 
             // Reset the device to recover from the error
             save_timestamp(&gpu_reset_timestamp);
             cudaDeviceReset();
-            fprintf(stdout,"WARNING: CUDA device was reset at %lu\n", gpu_reset_timestamp);
+            fprintf(stdout,"INFO: event: GPU_RESET_AT_ERROR, message: CUDA device was reset due to unrecoverable error, timestamp: %lu\n", gpu_reset_timestamp);
 
             // Exit application
             return;
@@ -935,7 +753,7 @@ void kernel_execution_loop(){
                 }
                 else
                 {
-                    fprintf(stdout,"ERROR: Kernel number %d is not implemented. Exiting application.\n", kernel_number);
+                    fprintf(stdout,"INFO: event: KERNEL_NOT_IMPLEMENTED, message: Kernel number %d is not implemented. Exiting application.\n", kernel_number);
                     return;
                 }
                 cudaEventRecord(kernel_stop[i], kernel_stream[i]);
@@ -961,9 +779,10 @@ void kernel_execution_loop(){
     fprintf(stdout,"[Kernel Launch Completed Successfully]\n");
     
     // Print start timestamp
-    kernel_launch_end_time = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    save_timestamp(&kernel_launch_end_time);
     time_convert = static_cast<time_t>(kernel_launch_end_time/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"\nKernel launch end timestamp: %lu [us], %s", kernel_launch_end_time, ctime(&time_convert));
+    fprintf(stdout, "INFO: event: KERNEL_LAUNCH_END, message: Kernel launch end, START: %lu, STOP: %lu, datetime: %s\n", kernel_launch_start_time, kernel_launch_end_time, ctime(&time_convert));
+    fflush(stdout); // Make sure the output is flushed immediately
     fprintf(stdout,"Kernel launch duration: %lu [us]\n", kernel_launch_end_time - kernel_launch_start_time);
 
     /* ------------------------------------ */
@@ -991,9 +810,10 @@ void kernel_execution_loop(){
 int main(int argc, char **argv){
     fprintf(stdout, "\n--------------------------------------------------------------------------\n");
     // Print start timestamp
-    app_start_timestamp = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    save_timestamp(&app_start_timestamp);
     time_convert = static_cast<time_t>(app_start_timestamp/1e6); // Convert microseconds to seconds
-    fprintf(stdout,"Program start timestamp: %lu [us], %s", app_start_timestamp, ctime(&time_convert));
+    fprintf(stdout, "INFO: event: APP_START, message: Application start, timestamp: %lu [us], datetime: %s\n", app_start_timestamp, ctime(&time_convert));
+    fflush(stdout); // Make sure the output is flushed immediately
 
     /* ------------------------------ */
     /* Setup signal and exit handlers */
@@ -1115,30 +935,26 @@ int main(int argc, char **argv){
     ss << std::put_time(f_ts, "%Y-%m-%d_%a_%H:%M:%S");
     file_timestamp = ss.str();
     results_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(RESULTS_FILE);
-    events_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(EVENTS_FILE);
     seu_data_file_path = std::string(output_folder) + file_timestamp + std::string("_") + std::string("exp_") + std::string(experiment_name) + std::string("_") + std::string(SEU_DATA_FILE);
 
     // Open results file for writing
     results_file = new std::fstream(results_file_path, std::ios::out | std::ios::binary | std::ios::app);
     if (!results_file->is_open()) {
-        fprintf(stderr, "Error opening results file for writing: %s\n", results_file_path.c_str());
+        uint64_t timestamp;
+        save_timestamp(&timestamp);
+        fprintf(stdout, "INFO: event: FILE_OPEN_ERROR, message: Error opening file for writing, file: RESULTS, timestamp: %lu [us], file_path: %s\n", timestamp, results_file_path.c_str());
         results_file->close();
         exit(EXIT_FAILURE);
     }
 
-    // Open events file for writing
-    events_file = new std::fstream(events_file_path, std::ios::out | std::ios::binary | std::ios::app);
-    if (!events_file->is_open()) {
-        fprintf(stderr, "Error opening events file for writing: %s\n", events_file_path.c_str());
-        events_file->close();
-        exit(EXIT_FAILURE);
-    }
 
     // Open SEU data file for writing
     #ifdef ENABLE_SEU_DATA_LOGGING
     seu_data_file = new std::fstream(seu_data_file_path, std::ios::out | std::ios::binary | std::ios::app);
     if (!seu_data_file->is_open()) {
-        fprintf(stderr, "Error opening SEU data file for writing: %s\n", seu_data_file_path.c_str());
+        uint64_t timestamp;
+        save_timestamp(&timestamp);
+        fprintf(stdout, "INFO: event: FILE_OPEN_ERROR, message: Error opening file for writing, file: SEU_DATA, timestamp: %lu [us], file_path: %s\n", timestamp, seu_data_file_path.c_str());
         seu_data_file->close();
         exit(EXIT_FAILURE);
     }
@@ -1147,7 +963,6 @@ int main(int argc, char **argv){
     // Write headers to output files
     printf("Writing header to output files...\n");
     write_header_to_results_file(results_file);
-    write_header_to_events_file(events_file);
 
     while(true){
         // Increment child process spawn count
@@ -1174,10 +989,16 @@ int main(int argc, char **argv){
 
         // PARENT process - Wait for child process to complete
         } else {
+
+            uint64_t timestamp;
+            save_timestamp(&timestamp);
+            fprintf(stdout, "INFO: event: PARENT_WAIT_CHILD, message: Waiting for kernel execution loop, kernel_exec_loop: %lu, timestamp: %lu [us], child_pid: %d\n", spawn_count, timestamp, pid);
+
             int status;
-            fprintf(stdout, "PARENT: Wait for kernel execution loop %lu\n", spawn_count);
             waitpid(pid, &status, 0);
-            fprintf(stdout, "PARENT: Kernel execution loop %lu status: %d\n", spawn_count, WEXITSTATUS(status));
+
+            save_timestamp(&timestamp);
+            fprintf(stdout, "INFO: event: PARENT_CHILD_EXIT, message: Child process exited, kernel_exec_loop: %lu, timestamp: %lu [us], child_pid: %d, exit_status: %d\n", spawn_count, timestamp, pid, WEXITSTATUS(status));
         }
 
         // Stop if kernel repetition count is provided
